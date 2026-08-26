@@ -11,11 +11,12 @@ import { restoreWorkspaces, saveWorkspace } from "../persistence/workspaces.ts";
 import { defaultSettings, REASONING_LEVEL_LABELS, REASONING_LEVELS, WORKSPACE_ACCESS_MODE_DESCRIPTIONS, WORKSPACE_ACCESS_MODE_LABELS, type ApiSettings, type ProviderModel, type ProviderProfile, type ReasoningLevel, type SessionSummary, type ToolActivity, type WorkspaceAccessMode, type WorkspaceInfo, type WorkspaceRecord, type WorkspaceWriteRequest } from "./state.ts";
 import { deriveSessionName } from "./sessionName.ts";
 import { groupTranscriptMessages } from "./transcript.ts";
+import { summarizeError } from "./errors.ts";
 import "../styles/app.css";
 
 function textFromMessage(message: any): string {
   const content = typeof message?.content === "string" ? message.content : Array.isArray(message?.content) ? message.content.map((block: any) => block.type === "text" ? block.text : "").filter(Boolean).join("\n") : "";
-  return message?.errorMessage ? `${content ? `${content}\n` : ""}Request failed: ${message.errorMessage}` : content;
+  return message?.errorMessage ? `${content ? `${content}\n` : ""}Request failed: ${summarizeError(message.errorMessage)}` : content;
 }
 
 function thinkingFromMessage(message: any): string {
@@ -810,7 +811,7 @@ export function App() {
       <header className="topbar"><div className="topbar-left"><span className="topbar-session-title">{activeSession?.name || "New session"}</span></div><div className="topbar-status"><button className="theme-toggle topbar-theme" aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`} title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`} onClick={() => setTheme((value) => value === "dark" ? "light" : "dark")}><UiIcon name={theme === "dark" ? "sun" : "moon"} /></button><button className="account-avatar" aria-label="Account">A</button></div></header>
       <div className="content-grid">
         <main className="main-pane">
-          {error && <div className="error-banner" role="alert">{error}<button onClick={() => setError("")} aria-label="Dismiss error">×</button></div>}
+          {error && <div className="error-banner" role="alert"><div className="error-banner-copy"><span>Full error details</span><small>{error}</small></div><button onClick={() => setError("")} aria-label="Dismiss error">×</button></div>}
           {workspaceInfo && !workspaceInfo.canWrite && <div className="workspace-callout warning"><strong>Permission required for {workspaceInfo.name}</strong><span>The saved folder handle is available, but the browser needs a fresh read/write approval.</span><button className="callout-button" onClick={() => setWorkspaceOpen(true)}>Grant access</button></div>}
           <section className="transcript" aria-live="polite">
             {messages.length === 0 && <div className="empty-state"><div className="empty-badge"><UiIcon name="spark" /><span>Browser workspace agent</span></div><h1>How can I help you with your workspace?</h1><p>I can read, edit and organize files in your workspace.</p><div className="quick-actions">{quickActions.map((action) => <button className="quick-action" key={action.title} onClick={() => setComposer(action.prompt)}><span className="quick-action-icon"><UiIcon name={action.icon} /></span><span className="quick-action-copy"><strong>{action.title}</strong><small>{action.description}</small></span><UiIcon name="arrow-right" /></button>)}</div></div>}
