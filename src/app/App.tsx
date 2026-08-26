@@ -301,6 +301,15 @@ function AssistantTurn({ messages, toolActivity, results }: { messages: any[]; t
   return <article className="message assistant"><div className="message-body"><div className="message-meta"><strong>Pi Webdesk</strong><time>{new Date(timestamped?.timestamp || Date.now()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></div>{messages.map((message, index) => message.role === "assistant" ? <AssistantSegment key={index} message={message} toolActivity={toolActivity} results={results} /> : message.role === "toolResult" && !knownIds.has(message.toolCallId) ? <ToolCallDisclosure key={message.toolCallId || index} call={{ id: message.toolCallId || `result-${index}`, name: message.toolName || "tool", arguments: {} }} result={message} /> : null)}</div></article>;
 }
 
+function ResponsePending({ runningTools, preparing }: { runningTools: boolean; preparing: boolean }) {
+  const title = preparing ? "Sending request" : runningTools ? "Working in your workspace" : "Request sent";
+  const detail = preparing ? "Connecting to the selected provider…" : runningTools ? "Pi Webdesk is gathering context…" : "Waiting for a response…";
+  return <div className="response-pending" role="status" aria-live="polite">
+    <span className="response-pending-dots" aria-hidden="true"><i /><i /><i /></span>
+    <span className="response-pending-copy"><strong>{title}</strong><small>{detail}</small></span>
+  </div>;
+}
+
 function formatFileSize(size: number): string {
   if (!size) return "—";
   if (size < 1024) return `${size} B`;
@@ -441,6 +450,7 @@ export function App() {
   const [editingSessionId, setEditingSessionId] = useState<string>();
   const [sessionNameDraft, setSessionNameDraft] = useState("");
   const [toolActivity, setToolActivity] = useState<Record<string, ToolActivity>>({});
+  const [requestPending, setRequestPending] = useState(false);
   const [apiStatus, setApiStatus] = useState<"unknown" | "checking" | "ready" | "error">("unknown");
   const bottomRef = useRef<HTMLDivElement>(null);
   const appShellRef = useRef<HTMLDivElement>(null);
@@ -525,8 +535,8 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (messages.length > 0 || Object.keys(toolActivity).length > 0) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, toolActivity]);
+    if (requestPending || messages.length > 0 || Object.keys(toolActivity).length > 0) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, requestPending, toolActivity]);
   useEffect(() => {
     if (!modelPickerOpen && !workspaceFocusOpen) return;
     const closeOnOutsidePointer = (event: PointerEvent) => {
@@ -625,7 +635,7 @@ export function App() {
 
   const send = async () => {
     const text = composer.trim(); if (!text) return;
-    setComposer(""); setError(""); setToolActivity({});
+    setComposer(""); setError(""); setToolActivity({}); setRequestPending(true);
     try {
       const current = await ensureAgent();
       const session = agentSessionRef.current;
@@ -639,6 +649,7 @@ export function App() {
       if (current.busy) current.steer(text); else await current.prompt(text); setMessages([...current.messages]);
     }
     catch (reason) { setError(errorText(reason)); setComposer(text); }
+    finally { setRequestPending(false); }
   };
 
   const startSession = async () => {
@@ -766,6 +777,7 @@ export function App() {
     void persistComposerSettings({ ...settings, reasoningLevel: level });
   };
   const busy = Boolean(agent?.busy);
+  const responsePending = requestPending || busy;
   const permissionLabel = workspaceInfo?.canWrite ? "Folder ready" : workspaceInfo ? "Permission needed" : "No folder";
   const quickPrompts = ["Inspect this workspace", "Find TODOs and FIXME comments", "Summarize the project structure"];
   const toolResults = new Map(messages.filter((message: any) => message.role === "toolResult").map((message: any) => [message.toolCallId, message]));
@@ -804,6 +816,7 @@ export function App() {
             {messages.length === 0 && <div className="empty-state"><div className="empty-badge"><UiIcon name="spark" /><span>Browser workspace agent</span></div><h1>How can I help you with your workspace?</h1><p>I can read, edit and organize files in your workspace.</p><div className="quick-actions">{quickActions.map((action) => <button className="quick-action" key={action.title} onClick={() => setComposer(action.prompt)}><span className="quick-action-icon"><UiIcon name={action.icon} /></span><span className="quick-action-copy"><strong>{action.title}</strong><small>{action.description}</small></span><UiIcon name="arrow-right" /></button>)}</div></div>}
             {transcriptGroups.map((group) => group.role === "assistant" ? <AssistantTurn key={group.key} messages={group.messages} toolActivity={toolActivity} results={toolResults} /> : <article className="message user" key={group.key}><div className="message-body"><div className="message-meta"><strong>You</strong><time>{new Date((group.message as any).timestamp || Date.now()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></div><div className="message-text">{safeMarkdown(textFromMessage(group.message))}</div></div></article>)}
             {Object.entries(toolActivity).filter(([id]) => !knownToolIds.has(id)).map(([id, activity]) => <ToolCallDisclosure key={id} call={{ id, name: activity.name, arguments: {} }} activity={activity} />)}
+            {responsePending && <ResponsePending preparing={requestPending && !busy} runningTools={Object.values(toolActivity).some((activity) => activity.status === "running")} />}
             <div ref={bottomRef} />
           </section>
           <footer className="composer-wrap">
