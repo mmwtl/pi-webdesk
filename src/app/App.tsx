@@ -332,20 +332,15 @@ function AssistantSegment({ message, toolActivity, results }: { message: any; to
   const errorMessage = message?.errorMessage ? summarizeError(message.errorMessage) : null;
   return <div className="assistant-segment">
     {thinking && <details className="thinking-disclosure"><summary>Reasoning</summary><div className="thinking-text">{safeMarkdown(thinking)}</div></details>}
-    {text && <div className="message-text">{safeMarkdown(text)}</div>}
-    {errorMessage && <div className="message-error"><UiIcon name="info" /><span>Request failed: {errorMessage}</span></div>}
     {calls.length > 0 && <div className="tool-stack">{calls.map((call: any) => <ToolCallDisclosure key={call.id} call={call} activity={toolActivity[call.id]} result={results.get(call.id)} />)}</div>}
+    {text && <div className="assistant-text-block"><div className="message-text">{safeMarkdown(text)}</div><CopyButton text={text} /></div>}
+    {errorMessage && <div className="message-error"><UiIcon name="info" /><span>Request failed: {errorMessage}</span></div>}
   </div>;
 }
 
 function AssistantTurn({ messages, toolActivity, results }: { messages: any[]; toolActivity: Record<string, ToolActivity>; results: Map<string, any> }) {
   const knownIds = new Set(messages.flatMap((message) => message.role === "assistant" && Array.isArray(message.content) ? message.content.filter((block: any) => block.type === "toolCall").map((block: any) => block.id) : []));
   const timestamped = messages.find((message) => message.role === "assistant") ?? messages[0];
-  const fullText = messages
-    .filter((m) => m.role === "assistant")
-    .map((m) => textFromMessage(m))
-    .filter(Boolean)
-    .join("\n\n");
 
   return <article className="message assistant">
     <div className="message-body">
@@ -358,7 +353,6 @@ function AssistantTurn({ messages, toolActivity, results }: { messages: any[]; t
       </div>
       {messages.map((message, index) => message.role === "assistant" ? <AssistantSegment key={index} message={message} toolActivity={toolActivity} results={results} /> : message.role === "toolResult" && !knownIds.has(message.toolCallId) ? <ToolCallDisclosure key={message.toolCallId || index} call={{ id: message.toolCallId || `result-${index}`, name: message.toolName || "tool", arguments: {} }} result={message} /> : null)}
     </div>
-    {fullText && <CopyButton text={fullText} />}
   </article>;
 }
 
