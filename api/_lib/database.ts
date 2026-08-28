@@ -119,7 +119,16 @@ interface ModelRow {
   updated_at: Date | string;
 }
 
+/**
+ * Vercel can cold-start several Functions at once. PostgreSQL's
+ * `CREATE TABLE IF NOT EXISTS` still has a catalog race in that situation,
+ * so the full migration is one statement guarded by a transaction-scoped lock.
+ */
 export const SCHEMA_SQL = `
+DO $pi_webdesk_schema$
+BEGIN
+  PERFORM pg_advisory_xact_lock(874531926);
+
 CREATE TABLE IF NOT EXISTS providers (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -151,6 +160,9 @@ ALTER TABLE models ADD COLUMN IF NOT EXISTS default_reasoning_level TEXT;
 
 CREATE INDEX IF NOT EXISTS providers_enabled_idx ON providers (enabled);
 CREATE INDEX IF NOT EXISTS models_provider_enabled_idx ON models (provider_id, enabled);
+
+END
+$pi_webdesk_schema$;
 `;
 
 let defaultDatabase: DatabaseClient | undefined;
@@ -161,9 +173,7 @@ export function getDatabase(): DatabaseClient {
 }
 
 export async function ensureSchema(db: DatabaseClient = getDatabase()): Promise<void> {
-  // Neon HTTP transactions are required for multiple DDL statements to be atomic.
-  const statements = SCHEMA_SQL.split(";\n").map((statement) => statement.trim()).filter(Boolean);
-  await db.transaction((tx) => statements.map((statement) => tx.query(`${statement};`)));
+  await db.query(SCHEMA_SQL);
 }
 
 async function rows<T>(db: DatabaseClient, query: string, params: unknown[] = []): Promise<T[]> {
