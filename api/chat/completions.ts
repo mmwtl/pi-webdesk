@@ -6,7 +6,7 @@ function upstreamUrl(baseUrl: string): string {
   return new URL("chat/completions", `${baseUrl.replace(/\/+$/, "")}/`).toString();
 }
 
-export default async function handler(request: Request): Promise<Response> {
+export async function POST(request: Request): Promise<Response> {
   if (request.method !== "POST") return methodNotAllowed(["POST"]);
   try {
     await prepareDatabase();

@@ -25,7 +25,7 @@ async function verifyProvider(providerId: string): Promise<void> {
   if (!await getProvider(providerId, undefined)) throw new HttpError(404, "Provider not found");
 }
 
-export default async function handler(request: Request): Promise<Response> {
+async function handler(request: Request): Promise<Response> {
   const denied = requireAdmin(request);
   if (denied) return denied;
   try {
@@ -59,3 +59,9 @@ export default async function handler(request: Request): Promise<Response> {
     return errorResponse(error);
   }
 }
+
+export function GET(request: Request): Promise<Response> { return handler(request); }
+export function POST(request: Request): Promise<Response> { return handler(request); }
+export function PATCH(request: Request): Promise<Response> { return handler(request); }
+export function PUT(request: Request): Promise<Response> { return handler(request); }
+export function DELETE(request: Request): Promise<Response> { return handler(request); }

@@ -7,7 +7,7 @@ function modelsUrl(baseUrl: string): string {
   return new URL("models", `${baseUrl.replace(/\/+$/, "")}/`).toString();
 }
 
-export default async function handler(request: Request): Promise<Response> {
+export async function POST(request: Request): Promise<Response> {
   const denied = requireAdmin(request);
   if (denied) return denied;
   if (request.method !== "POST") return methodNotAllowed(["POST"]);

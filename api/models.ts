@@ -6,7 +6,7 @@ import { prepareDatabase } from "./_lib/ready.js";
  * Backward-compatible, browser-safe model list. The composer uses /api/config
  * because that keeps models associated with their providers.
  */
-export default async function handler(request: Request): Promise<Response> {
+export async function GET(request: Request): Promise<Response> {
   if (request.method !== "GET") return methodNotAllowed(["GET"]);
   try {
     await prepareDatabase();
