@@ -1,7 +1,7 @@
-import { getProviderWithSecret } from "../_lib/database";
-import { requireAdmin } from "../_lib/auth";
-import { errorResponse, HttpError, isRecord, json, methodNotAllowed, parseJsonObject, requiredString } from "../_lib/http";
-import { prepareDatabase } from "../_lib/ready";
+import { getProviderWithSecret } from "../_lib/database.js";
+import { requireAdmin } from "../_lib/auth.js";
+import { errorResponse, HttpError, isRecord, json, methodNotAllowed, parseJsonObject, requiredString } from "../_lib/http.js";
+import { prepareDatabase } from "../_lib/ready.js";
 
 function modelsUrl(baseUrl: string): string {
   return new URL("models", `${baseUrl.replace(/\/+$/, "")}/`).toString();

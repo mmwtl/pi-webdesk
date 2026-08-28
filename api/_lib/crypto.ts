@@ -1,6 +1,6 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
-import { getRuntimeConfig } from "./config";
+import { getRuntimeConfig } from "./config.js";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_BYTES = 12;

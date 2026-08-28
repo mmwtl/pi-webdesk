@@ -1,6 +1,6 @@
-import { getProviderWithSecret, listModels } from "../_lib/database";
-import { errorResponse, HttpError, json, methodNotAllowed, parseJsonObject } from "../_lib/http";
-import { prepareDatabase } from "../_lib/ready";
+import { getProviderWithSecret, listModels } from "../_lib/database.js";
+import { errorResponse, HttpError, json, methodNotAllowed, parseJsonObject } from "../_lib/http.js";
+import { prepareDatabase } from "../_lib/ready.js";
 
 function upstreamUrl(baseUrl: string): string {
   return new URL("chat/completions", `${baseUrl.replace(/\/+$/, "")}/`).toString();

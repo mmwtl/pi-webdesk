@@ -1,4 +1,4 @@
-import { ensureSchema } from "./database";
+import { ensureSchema } from "./database.js";
 
 let schemaPromise: Promise<void> | undefined;
 

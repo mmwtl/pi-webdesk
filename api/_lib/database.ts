@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 
-import { decryptApiKey, encryptApiKey, type EncryptedSecret } from "./crypto";
-import { getRuntimeConfig } from "./config";
+import { decryptApiKey, encryptApiKey, type EncryptedSecret } from "./crypto.js";
+import { getRuntimeConfig } from "./config.js";
 
 export type DatabaseClient = NeonQueryFunction<false, false>;
 

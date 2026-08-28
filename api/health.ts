@@ -1,6 +1,6 @@
-import { listProviders } from "./_lib/database";
-import { errorResponse, json, methodNotAllowed } from "./_lib/http";
-import { prepareDatabase } from "./_lib/ready";
+import { listProviders } from "./_lib/database.js";
+import { errorResponse, json, methodNotAllowed } from "./_lib/http.js";
+import { prepareDatabase } from "./_lib/ready.js";
 
 export default async function handler(request: Request): Promise<Response> {
   if (request.method !== "GET") return methodNotAllowed(["GET"]);

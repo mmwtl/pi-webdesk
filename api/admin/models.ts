@@ -1,7 +1,7 @@
-import { createModel, deleteModel, getProvider, listModels, updateModel } from "../_lib/database";
-import { requireAdmin } from "../_lib/auth";
-import { errorResponse, HttpError, isRecord, json, methodNotAllowed, optionalBoolean, optionalString, parseJsonObject, parseQueryId, requiredString } from "../_lib/http";
-import { prepareDatabase } from "../_lib/ready";
+import { createModel, deleteModel, getProvider, listModels, updateModel } from "../_lib/database.js";
+import { requireAdmin } from "../_lib/auth.js";
+import { errorResponse, HttpError, isRecord, json, methodNotAllowed, optionalBoolean, optionalString, parseJsonObject, parseQueryId, requiredString } from "../_lib/http.js";
+import { prepareDatabase } from "../_lib/ready.js";
 
 function metadata(body: Record<string, unknown>): Record<string, unknown> | undefined {
   if (body.metadata === undefined) return undefined;

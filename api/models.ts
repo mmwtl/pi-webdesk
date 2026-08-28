@@ -1,6 +1,6 @@
-import { listModels } from "./_lib/database";
-import { errorResponse, json, methodNotAllowed } from "./_lib/http";
-import { prepareDatabase } from "./_lib/ready";
+import { listModels } from "./_lib/database.js";
+import { errorResponse, json, methodNotAllowed } from "./_lib/http.js";
+import { prepareDatabase } from "./_lib/ready.js";
 
 /**
  * Backward-compatible, browser-safe model list. The composer uses /api/config

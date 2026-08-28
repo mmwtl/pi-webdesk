@@ -1,7 +1,7 @@
-import { createProvider, deleteProvider, listProviders, updateProvider } from "../_lib/database";
-import { requireAdmin } from "../_lib/auth";
-import { errorResponse, HttpError, json, methodNotAllowed, optionalBoolean, optionalString, parseJsonObject, parseQueryId, requiredString } from "../_lib/http";
-import { prepareDatabase } from "../_lib/ready";
+import { createProvider, deleteProvider, listProviders, updateProvider } from "../_lib/database.js";
+import { requireAdmin } from "../_lib/auth.js";
+import { errorResponse, HttpError, json, methodNotAllowed, optionalBoolean, optionalString, parseJsonObject, parseQueryId, requiredString } from "../_lib/http.js";
+import { prepareDatabase } from "../_lib/ready.js";
 
 export default async function handler(request: Request): Promise<Response> {
   const denied = requireAdmin(request);

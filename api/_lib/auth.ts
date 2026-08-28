@@ -1,6 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
-import { HttpError, json, noStore } from "./http";
+import { HttpError, json, noStore } from "./http.js";
 
 const COOKIE_NAME = "pi_webdesk_admin";
 const SESSION_TTL_SECONDS = 12 * 60 * 60;
