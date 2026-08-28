@@ -412,7 +412,7 @@ function WorkspaceAccessMenu({ mode, onChange }: { mode: WorkspaceAccessMode; on
   </div>;
 }
 
-function WorkspaceInspector({ info, accessMode, entries, messages, tab, onTabChange, query, onQueryChange, expandedPaths, selectedPath, onToggle, onSelect }: { info?: WorkspaceInfo; accessMode: WorkspaceAccessMode; entries: BrowserEntry[]; messages: AgentMessage[]; tab: InspectorTab; onTabChange: (tab: InspectorTab) => void; query: string; onQueryChange: (value: string) => void; expandedPaths: string[]; selectedPath: string; onToggle: (path: string) => void; onSelect: (entry: BrowserEntry) => void }) {
+function WorkspaceInspector({ info, accessMode, entries, messages, tab, onTabChange, query, onQueryChange, expandedPaths, selectedPath, onToggle, onSelect, onRefresh }: { info?: WorkspaceInfo; accessMode: WorkspaceAccessMode; entries: BrowserEntry[]; messages: AgentMessage[]; tab: InspectorTab; onTabChange: (tab: InspectorTab) => void; query: string; onQueryChange: (value: string) => void; expandedPaths: string[]; selectedPath: string; onToggle: (path: string) => void; onSelect: (entry: BrowserEntry) => void; onRefresh: () => void }) {
   const files = entries.filter((entry) => entry.kind === "file");
   const folders = entries.filter((entry) => entry.kind === "directory");
   const toolEvents = messages.filter((message: any) => message.role === "toolResult" && (message.toolName || message.toolCallId)).slice(-4).reverse() as any[];
@@ -422,7 +422,7 @@ function WorkspaceInspector({ info, accessMode, entries, messages, tab, onTabCha
     <div className="workspace-tabs" role="tablist"><button className={tab === "overview" ? "active" : ""} role="tab" aria-selected={tab === "overview"} onClick={() => onTabChange("overview")}>Overview</button><button className={tab === "details" ? "active" : ""} role="tab" aria-selected={tab === "details"} onClick={() => onTabChange("details")}>Details</button></div>
     {tab === "overview" ? <>
       <div className="workspace-stats"><div><span>Files</span><strong>{info ? compactCount(files.length) : "—"}</strong></div><div><span>Folders</span><strong>{info ? compactCount(folders.length) : "—"}</strong></div><div><span>Lines</span><strong>{info ? "—" : "—"}</strong></div><div><span>Language</span><strong>{info ? languageForEntries(files) : "—"}</strong></div></div>
-      <section className="inspector-card workspace-files-card"><div className="inspector-card-heading"><strong>Files</strong><span>{files.length ? `${files.length} files` : "No files"}</span></div><label className="inspector-file-search"><UiIcon name="search" /><input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Search files..." aria-label="Search workspace files" /></label><div className="workspace-tree"><WorkspaceTree entries={entries} query={query} expandedPaths={expandedPaths} selectedPath={selectedPath} onToggle={onToggle} onSelect={onSelect} /></div></section>
+      <section className="inspector-card workspace-files-card"><div className="inspector-card-heading"><strong>Files</strong><div className="inspector-heading-actions"><span>{files.length ? `${files.length} files` : "No files"}</span><button className="file-tool-button" aria-label="Refresh files" title="Refresh files" onClick={onRefresh} disabled={!info}><UiIcon name="refresh" /></button></div></div><label className="inspector-file-search"><UiIcon name="search" /><input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Search files..." aria-label="Search workspace files" /></label><div className="workspace-tree"><WorkspaceTree entries={entries} query={query} expandedPaths={expandedPaths} selectedPath={selectedPath} onToggle={onToggle} onSelect={onSelect} /></div></section>
       <section className="inspector-card activity-card"><div className="inspector-card-heading"><strong>Recent activity</strong><span>{toolEvents.length ? "Live" : "Waiting"}</span></div>{toolEvents.length ? <div className="activity-list">{toolEvents.map((event, index) => <div className="activity-row" key={`${event.toolCallId || event.toolName}-${index}`}><span className="activity-icon"><UiIcon name={event.toolName === "edit" || event.toolName === "write" ? "edit" : event.toolName === "grep" || event.toolName === "find" ? "search" : "file"} /></span><span><b>{event.toolName || "Read"}</b><small>{typeof event.content === "string" ? event.content.slice(0, 34) : "Completed"}</small></span><time>now</time></div>)}</div> : <p className="inspector-empty">Your file reads and edits will appear here.</p>}</section>
     </> : <section className="inspector-details"><div><span>Workspace</span><strong>{info?.name ?? "No workspace selected"}</strong></div><div><span>Folder permission</span><strong>{info?.canWrite ? "Read and write" : info ? "Permission needed" : "Not connected"}</strong></div><div><span>Agent access</span><strong>{WORKSPACE_ACCESS_MODE_LABELS[accessMode]}</strong></div><div><span>Storage</span><strong>Browser only</strong></div><div><span>Files in view</span><strong>{info ? compactCount(files.length) : "—"}</strong></div>{selectedEntry && <div><span>Selected file</span><strong title={selectedEntry.path}>{selectedEntry.name}</strong></div>}<p>Pi Webdesk uses the File System Access API. Nothing is uploaded until a provider request is sent.</p></section>}
   </aside>;
@@ -470,6 +470,7 @@ export function App() {
   const workspaceFocusAnchorRef = useRef<HTMLDivElement>(null);
   const workspaceFocusTriggerRef = useRef<HTMLButtonElement>(null);
   const workspacePickerRef = useRef<HTMLDivElement>(null);
+  const workspaceRef = useRef<BrowserWorkspace | undefined>(undefined);
 
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -478,6 +479,9 @@ export function App() {
   useEffect(() => {
     localStorage.setItem(WORKSPACE_ACCESS_MODE_KEY, workspaceAccessMode);
   }, [workspaceAccessMode]);
+  useEffect(() => {
+    workspaceRef.current = workspace;
+  }, [workspace]);
   const settingsRevisionRef = useRef(0);
 
   const discardAgent = () => {
@@ -560,17 +564,35 @@ export function App() {
   }, [modelPickerOpen, workspaceFocusOpen, workspaceOpen]);
   useEffect(() => () => agentSubscriptionRef.current?.(), []);
 
-  const refreshWorkspaceTree = async (target: BrowserWorkspace) => {
+  const refreshWorkspaceTree = async (target?: BrowserWorkspace, mode: "initial" | "update" = "update") => {
+    const activeTarget = target ?? workspaceRef.current ?? workspace;
+    if (!activeTarget) return;
     try {
       const entries: BrowserEntry[] = [];
-      for await (const entry of target.walk()) {
+      for await (const entry of activeTarget.walk()) {
         entries.push({ name: entry.path.split("/").at(-1) ?? entry.path, path: entry.path, kind: entry.kind, size: entry.size });
         if (entries.length >= 240) break;
       }
       setWorkspaceEntries(entries);
-      setExpandedPaths(entries.filter((entry) => entry.kind === "directory").map((entry) => entry.path));
+      if (mode === "initial") {
+        setExpandedPaths(entries.filter((entry) => entry.kind === "directory").map((entry) => entry.path));
+      } else {
+        setExpandedPaths((current) => {
+          if (!current.length) return entries.filter((entry) => entry.kind === "directory").map((entry) => entry.path);
+          const currentSet = new Set(current);
+          const validDirs = entries.filter((entry) => entry.kind === "directory");
+          const next = new Set(current.filter((path) => validDirs.some((dir) => dir.path === path)));
+          for (const dir of validDirs) {
+            const parent = dir.path.includes("/") ? dir.path.split("/").slice(0, -1).join("/") : "";
+            if (parent && next.has(parent) && !currentSet.has(dir.path)) {
+              next.add(dir.path);
+            }
+          }
+          return Array.from(next);
+        });
+      }
     } catch (reason) {
-      setWorkspaceEntries([]);
+      if (mode === "initial") setWorkspaceEntries([]);
       setError(errorText(reason));
     }
   };
@@ -581,10 +603,11 @@ export function App() {
     const saved = await saveWorkspace(next);
     const info: WorkspaceInfo = { id: saved.id, name: saved.name, permission: "granted", canWrite: true };
     discardAgent();
+    workspaceRef.current = next;
     setWorkspace(next); setWorkspaceInfo(info); setSavedWorkspaces(await restoreWorkspaces()); setSessions(await listSessions(info.id));
     setWorkspaceEntries([]); setExpandedPaths([]); setSelectedFilePath(""); setInspectorTab("overview");
     agentSessionRef.current = undefined; setActiveSession(undefined); setMessages([]); setToolActivity({}); setWorkspaceOpen(false); setError("");
-    void refreshWorkspaceTree(next);
+    void refreshWorkspaceTree(next, "initial");
   };
 
   const openFolder = async () => {
@@ -622,11 +645,17 @@ export function App() {
       setMessages([...next.messages]);
       if (event.type === "tool_execution_start") setToolActivity((current) => ({ ...current, [event.toolCallId]: { name: event.toolName, status: "running", output: "" } }));
       if (event.type === "tool_execution_update") setToolActivity((current) => ({ ...current, [event.toolCallId]: { ...(current[event.toolCallId] ?? { name: event.toolName, status: "running", output: "" }), output: `${current[event.toolCallId]?.output ?? ""}${textFromMessage(event.partialResult)}` } }));
-      if (event.type === "tool_execution_end") setToolActivity((current) => ({ ...current, [event.toolCallId]: { ...(current[event.toolCallId] ?? { name: event.toolName, output: "" }), status: event.isError ? "error" : "done" } }));
+      if (event.type === "tool_execution_end") {
+        setToolActivity((current) => ({ ...current, [event.toolCallId]: { ...(current[event.toolCallId] ?? { name: event.toolName, output: "" }), status: event.isError ? "error" : "done" } }));
+        if (!event.isError && (event.toolName === "write" || event.toolName === "edit" || event.toolName === "apply_patch" || event.toolName === "delete")) {
+          void refreshWorkspaceTree(workspace, "update");
+        }
+      }
       if (event.type === "agent_end") {
         const last = event.messages.at(-1) as any;
         if (last?.stopReason === "error") setError(last.errorMessage || "The API request failed");
         if (agentSessionRef.current) void persist(next, agentSessionRef.current);
+        void refreshWorkspaceTree(workspace, "update");
       }
     });
     setAgent(next);
@@ -846,7 +875,7 @@ export function App() {
             <div className="composer-actions"><button className="composer-round-button" aria-label="Manage providers and models" title="Manage providers and models" onClick={() => { setSettingsOpen(true); setModelPickerOpen(false); setWorkspaceFocusOpen(false); }}><UiIcon name="plus" /></button><button ref={workspaceFocusTriggerRef} className={`composer-workspace-button ${workspaceFocusOpen ? "open" : ""}`} aria-label={`Workspace access: ${WORKSPACE_ACCESS_MODE_LABELS[workspaceAccessMode]}`} aria-haspopup="menu" aria-expanded={workspaceFocusOpen} title={`Workspace access: ${WORKSPACE_ACCESS_MODE_LABELS[workspaceAccessMode]}`} onClick={toggleWorkspaceFocus}><span>{WORKSPACE_ACCESS_BUTTON_LABELS[workspaceAccessMode]}</span><Chevron open={workspaceFocusOpen} /></button><span className="composer-actions-spacer" /><div className="composer-selection"><span className="composer-provider-name" title={activeSelection.provider.name}>{activeSelection.provider.name}</span><button ref={modelPickerTriggerRef} className={`composer-model-summary ${modelPickerOpen ? "open" : ""}`} aria-label={`Choose model and reasoning level: ${activeModelLabel}`} title={`${activeSelection.provider.name} · ${activeModelLabel} · ${activeReasoningLabel}`} onClick={toggleModelPicker}><span className="composer-model-name">{activeModelLabel}</span><span className="composer-reasoning-value">{activeReasoningLabel}</span><Chevron open={modelPickerOpen} /></button></div>{busy && <button className="stop-button" aria-label="Stop agent" title="Stop agent" onClick={() => agent?.abort()}><UiIcon name="stop" /></button>}<button className="send-button" aria-label={busy ? "Steer agent" : "Send message"} title={busy ? "Steer agent" : "Send message"} onClick={() => void send()} disabled={!composer.trim()}><UiIcon name="send" /></button></div>
           </footer>
         </main>
-        <WorkspaceInspector info={workspaceInfo} accessMode={workspaceAccessMode} entries={workspaceEntries} messages={messages} tab={inspectorTab} onTabChange={setInspectorTab} query={fileQuery} onQueryChange={setFileQuery} expandedPaths={expandedPaths} selectedPath={selectedFilePath} onToggle={toggleTreePath} onSelect={selectFile} />
+        <WorkspaceInspector info={workspaceInfo} accessMode={workspaceAccessMode} entries={workspaceEntries} messages={messages} tab={inspectorTab} onTabChange={setInspectorTab} query={fileQuery} onQueryChange={setFileQuery} expandedPaths={expandedPaths} selectedPath={selectedFilePath} onToggle={toggleTreePath} onSelect={selectFile} onRefresh={() => void refreshWorkspaceTree(workspace, "update")} />
       </div>
     </section>
     {settingsOpen && <SettingsDialog settings={settings} apiStatus={apiStatus} onTest={() => void testApi()} onChange={updateSettings} onProvidersChanged={() => void refreshServerCatalog()} onClose={() => setSettingsOpen(false)} />}
