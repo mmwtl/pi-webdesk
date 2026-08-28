@@ -140,7 +140,7 @@ function reconcileReasoningLevel(current: ReasoningLevel, available: readonly Re
 
 type Theme = "dark" | "light";
 
-const DEFAULT_SIDEBAR_WIDTH = 256;
+const DEFAULT_SIDEBAR_WIDTH = 260;
 const MIN_SIDEBAR_WIDTH = 200;
 const MAX_SIDEBAR_WIDTH = 380;
 const SIDEBAR_WIDTH_KEY = "pi-webdesk-sidebar-width";
@@ -151,7 +151,7 @@ const WORKSPACE_ACCESS_OPTIONS: WorkspaceAccessMode[] = ["read", "confirm", "wri
 const WORKSPACE_ACCESS_BUTTON_LABELS: Record<WorkspaceAccessMode, string> = {
   read: "Read only",
   confirm: "Confirm writes",
-  write: "Write directly",
+  write: "Auto-write",
 };
 
 type ComposerModel = { provider: ProviderProfile; model: ProviderModel };
@@ -232,13 +232,10 @@ function readMigratedStorage(key: string, legacyKey: string): string | null {
   return legacy;
 }
 
-function LogoMark() {
-  return <svg className="logo-mark" viewBox="0 0 800 800" aria-hidden="true"><path fill="currentColor" fillRule="evenodd" d="M165.29 165.29h352.07V400H400v117.36H282.65v117.36H165.29zM282.65 282.65V400H400V282.65z" /><path fill="currentColor" d="M517.36 400h117.36v234.72H517.36z" /></svg>;
-}
-
-function UiIcon({ name }: { name: "folder" | "plus" | "edit" | "close" | "settings" | "send" | "stop" | "sun" | "moon" | "search" | "filter" | "file" | "globe" | "eye" | "refresh" | "check" | "info" | "code" | "message" | "arrow-right" | "spark" | "copy" }) {
+function UiIcon({ name }: { name: "folder" | "plus" | "edit" | "close" | "settings" | "send" | "stop" | "sun" | "moon" | "search" | "filter" | "file" | "globe" | "eye" | "refresh" | "check" | "info" | "code" | "message" | "arrow-right" | "spark" | "copy" | "terminal" }) {
   let paths: React.ReactNode;
   if (name === "folder") paths = <><path d="M2.5 5.5h4l1.5 1.7h5.5v5.3h-11z" /><path d="M2.5 5.5V4h4l1.4 1.5" /></>;
+  else if (name === "terminal") paths = <><path d="m3 4 4 4-4 4" /><path d="M9 12h4" /></>;
   else if (name === "plus") paths = <path d="M8 3v10M3 8h10" />;
   else if (name === "edit") paths = <><path d="m3 11.8 1.1-3.2 6.7-6.7 2.3 2.3-6.7 6.7z" /><path d="m9.6 3.1 2.3 2.3" /></>;
   else if (name === "close") paths = <path d="m4 4 8 8M12 4 4 12" />;
@@ -250,15 +247,7 @@ function UiIcon({ name }: { name: "folder" | "plus" | "edit" | "close" | "settin
   else if (name === "search") paths = <><circle cx="7" cy="7" r="4.1" /><path d="m10.1 10.1 3.2 3.2" /></>;
   else if (name === "filter") paths = <path d="M2.4 3.2h11.2L9.3 8.4v3.4l-2.6 1V8.4z" />;
   else if (name === "file") paths = <><path d="M4 1.8h5l3 3v9.4H4z" /><path d="M9 1.8v3h3M6 8h4M6 10.5h3" /></>;
-  else if (name === "globe") paths = <><circle cx="8" cy="8" r="5.6" /><path d="M2.7 8h10.6M8 2.4c1.5 1.5 2.2 3.4 2.2 5.6S9.5 12.1 8 13.6C6.5 12.1 5.8 10.2 5.8 8S6.5 3.9 8 2.4z" /></>;
-  else if (name === "eye") paths = <><path d="M1.8 8s2.2-3.5 6.2-3.5S14.2 8 14.2 8 12 11.5 8 11.5 1.8 8 1.8 8z" /><circle cx="8" cy="8" r="1.4" /></>;
-  else if (name === "refresh") paths = <><path d="M12.7 5.4A5.5 5.5 0 0 0 3.1 4.3L2.3 6.5" /><path d="M2.3 3.8v2.7H5" /><path d="M3.3 10.6a5.5 5.5 0 0 0 9.6 1.1l.8-2.2" /><path d="M13.7 12.2V9.5H11" /></>;
   else if (name === "check") paths = <path d="m3 8.2 3.1 3.1L13 4.7" />;
-  else if (name === "info") paths = <><circle cx="8" cy="8" r="5.6" /><path d="M8 7.1v3.5M8 4.9h.01" /></>;
-  else if (name === "code") paths = <><path d="m6 4-3 4 3 4M10 4l3 4-3 4" /></>;
-  else if (name === "message") paths = <path d="M3 3.2h10v7.1H7.7L4.3 13v-2.7H3z" />;
-  else if (name === "arrow-right") paths = <path d="M2.5 8h10.5M9 4l4 4-4 4" />;
-  else if (name === "spark") paths = <><path d="m8 1.8 1.3 3.4 3.4 1.3-3.4 1.3L8 11.2 6.7 7.8 3.3 6.5l3.4-1.3z" /><path d="m12.4 10.4.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5z" /></>;
   else if (name === "copy") paths = <><rect x="5.5" y="5.5" width="7.5" height="7.5" rx="1.5" /><path d="M3.5 10.5h-1a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v1" /></>;
   else paths = null;
   return <svg className={`ui-icon ${name}`} viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.45" strokeLinecap="round" strokeLinejoin="round">{paths}</svg>;
@@ -281,9 +270,8 @@ function CopyButton({ text, className = "" }: { text: string; className?: string
 
   useEffect(() => () => { if (timeoutRef.current) window.clearTimeout(timeoutRef.current); }, []);
 
-  return <button className={`message-copy-button ${copied ? "copied" : ""} ${className}`} aria-label={copied ? "Copied to clipboard" : "Copy message"} title={copied ? "Copied!" : "Copy message"} onClick={handleCopy} type="button">
+  return <button className={`session-item-action ${copied ? "copied" : ""} ${className}`} aria-label={copied ? "Copied" : "Copy"} title={copied ? "Copied!" : "Copy"} onClick={handleCopy} type="button">
     <UiIcon name={copied ? "check" : "copy"} />
-    {copied && <span className="copy-tooltip">Copied</span>}
   </button>;
 }
 
@@ -291,19 +279,12 @@ function Chevron({ open }: { open: boolean }) {
   return <svg className={`chevron ${open ? "open" : ""}`} viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg>;
 }
 
-function ToolGlyph({ name }: { name: string }) {
-  const glyph = name === "grep" ? <><circle cx="7" cy="7" r="3.5" /><path d="m10 10 3 3" /></> : name === "ls" || name === "find" ? <><path d="M2.5 5.5h4l1.4 1.6h5.6v5.4h-11z" /><path d="M2.5 5.5V4h4l1.4 1.5" /></> : name === "edit" || name === "write" || name === "apply_patch" ? <><path d="m3 11.8 1.2-3.4L10.8 1.8l2.4 2.4-6.6 6.6z" /><path d="m9.5 3.1 2.4 2.4" /></> : <><path d="M4 2.5h5l3 3v8H4z" /><path d="M9 2.5v3h3M6 9h4M6 11.5h3" /></>;
-  return <svg className="tool-glyph" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round">{glyph}</svg>;
-}
-
 function toolSummary(name: string, args: Record<string, unknown>): string {
   const path = typeof args.path === "string" ? args.path : "";
-  if (name === "grep") return `${typeof args.pattern === "string" ? `"${args.pattern}"` : "pattern"}${path ? ` in ${path}` : ""}`;
-  if (name === "find") return `${typeof args.pattern === "string" ? args.pattern : "pattern"}${path ? ` in ${path}` : ""}`;
-  if (name === "edit") return path || "exact replacement";
-  if (name === "write") return path || "file";
-  if (name === "apply_patch") return "patch";
-  if (name === "delete") return path || "path";
+  if (name === "grep") return `-r "${args.pattern ?? ""}" ${path || "src/"}`;
+  if (name === "find") return `-name "${args.pattern ?? ""}" ${path || "."}`;
+  if (name === "edit" || name === "write" || name === "delete") return path || "file";
+  if (name === "apply_patch") return path || "src/";
   return path || ".";
 }
 
@@ -311,19 +292,74 @@ function toolResultText(result: any): string {
   return typeof result?.content === "string" ? result.content : textFromMessage(result);
 }
 
+function FormattedOutput({ text, toolName }: { text: string; toolName: string }) {
+  if (!text) return <div className="tool-output-raw">Waiting for output…</div>;
+
+  const lines = text.split("\n");
+  const isDiff = toolName === "apply_patch" || toolName === "edit" || text.includes("@@") || lines.some((l) => l.startsWith("+") || l.startsWith("-"));
+
+  if (isDiff) {
+    let lineCounter = 1;
+    return (
+      <div className="diff-view">
+        {lines.map((line, idx) => {
+          let lineType = "context";
+          if (line.startsWith("+") && !line.startsWith("+++")) lineType = "add";
+          else if (line.startsWith("-") && !line.startsWith("---")) lineType = "del";
+          else if (line.startsWith("diff") || line.startsWith("---") || line.startsWith("+++") || line.startsWith("@@")) lineType = "meta";
+
+          const currentLineNo = lineType === "meta" ? "" : String(lineCounter++);
+          return (
+            <div key={idx} className={`diff-row ${lineType}`}>
+              <span className="diff-line-no">{currentLineNo}</span>
+              <span className="diff-line-txt">{line}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  if (toolName === "grep") {
+    return (
+      <div className="grep-view">
+        {lines.map((line, idx) => {
+          const match = line.match(/^([^:]+):(\d+):?(.*)$/);
+          if (match) {
+            return (
+              <div key={idx} className="grep-row">
+                <span className="grep-path">{match[1]}</span>
+                <span className="grep-lineno">:{match[2]}</span>
+                <span className="grep-content">{match[3]}</span>
+              </div>
+            );
+          }
+          return <div key={idx} className="grep-row"><span className="grep-content">{line}</span></div>;
+        })}
+      </div>
+    );
+  }
+
+  return <pre className="tool-output-raw">{text}</pre>;
+}
+
 function ToolCallDisclosure({ call, activity, result }: { call: { id: string; name: string; arguments: Record<string, unknown> }; activity?: ToolActivity; result?: any }) {
   const status: ToolActivity["status"] = activity?.status ?? (result ? result.isError ? "error" : "done" : "running");
-  const [open, setOpen] = useState(status === "running" || status === "error");
+  const [open, setOpen] = useState(true);
   const details = result ? toolResultText(result) : activity?.output ?? "";
-  return <div className={`tool-disclosure ${status} ${open ? "expanded" : ""}`}>
-    <button className="tool-disclosure-row" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+
+  return <div className={`terminal-card tool-card ${open ? "expanded" : ""}`}>
+    <div className="tool-card-header" onClick={() => setOpen((v) => !v)}>
       <Chevron open={open} />
-      <span style={{ color: "var(--accent)", fontFamily: "var(--font-mono)", fontWeight: 700 }}>$</span>
-      <strong>{call.name}</strong>
-      <span className="tool-summary">{toolSummary(call.name, call.arguments ?? {})}</span>
-      <span className={`tool-state ${status}`}><i />{status === "running" ? "Running" : status === "error" ? "Failed" : "Done"}</span>
-    </button>
-    {open && <div className="tool-disclosure-panel"><div className="tool-panel-label">{result?.isError ? "Error output" : "Command output"}<span>{result ? "Exit 0" : "Live"}</span></div><pre>{details || "Executing…"}</pre></div>}
+      <span className="tool-cmd-prefix">$</span>
+      <span className="tool-cmd-name">{call.name}</span>
+      <span className="tool-cmd-summary">{toolSummary(call.name, call.arguments ?? {})}</span>
+      <span className={`tool-status-pill ${status}`}>{status}</span>
+      <div className="tool-card-actions" onClick={(e) => e.stopPropagation()}>
+        <CopyButton text={details} />
+      </div>
+    </div>
+    {open && <div className="tool-card-body"><FormattedOutput text={details} toolName={call.name} /></div>}
   </div>;
 }
 
@@ -332,33 +368,20 @@ function AssistantSegment({ message, toolActivity, results }: { message: any; to
   const text = typeof message?.content === "string" ? message.content : Array.isArray(message?.content) ? message.content.map((block: any) => block.type === "text" ? block.text : "").filter(Boolean).join("\n") : "";
   const thinking = thinkingFromMessage(message);
   const errorMessage = message?.errorMessage ? summarizeError(message.errorMessage) : null;
-  return <div className="assistant-segment">
-    {thinking && <details className="thinking-disclosure"><summary>Thought</summary><div className="thinking-text">{safeMarkdown(thinking)}</div></details>}
-    {calls.length > 0 && <div className="tool-stack">{calls.map((call: any) => <ToolCallDisclosure key={call.id} call={call} activity={toolActivity[call.id]} result={results.get(call.id)} />)}</div>}
-    {text && <div className="assistant-text-block"><div className="message-text">{safeMarkdown(text)}</div><CopyButton text={text} /></div>}
-    {errorMessage && <div className="error-banner"><div className="error-banner-copy"><strong>Request failed</strong><small>{errorMessage}</small></div></div>}
+
+  return <div className="assistant-turn-block">
+    {thinking && <details className="terminal-card thought-card" open><summary><Chevron open={true} /><span>💬 Thought</span></summary><div className="thought-card-body">{safeMarkdown(thinking)}</div></details>}
+    {calls.map((call: any) => <ToolCallDisclosure key={call.id} call={call} activity={toolActivity[call.id]} result={results.get(call.id)} />)}
+    {text && <div className="assistant-response-text">{safeMarkdown(text)}</div>}
+    {errorMessage && <div className="error-banner"><div className="error-banner-copy"><strong>Error</strong><small>{errorMessage}</small></div></div>}
   </div>;
 }
 
 function AssistantTurn({ messages, toolActivity, results }: { messages: any[]; toolActivity: Record<string, ToolActivity>; results: Map<string, any> }) {
   const knownIds = new Set(messages.flatMap((message) => message.role === "assistant" && Array.isArray(message.content) ? message.content.filter((block: any) => block.type === "toolCall").map((block: any) => block.id) : []));
-  const timestamped = messages.find((message) => message.role === "assistant") ?? messages[0];
 
-  return <article className="message assistant">
-    <div className="message-meta">
-      <span className="assistant-badge">π</span>
-      <strong>Pi Webdesk</strong>
-      <time>{new Date(timestamped?.timestamp || Date.now()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>
-    </div>
+  return <div className="assistant-stream">
     {messages.map((message, index) => message.role === "assistant" ? <AssistantSegment key={index} message={message} toolActivity={toolActivity} results={results} /> : message.role === "toolResult" && !knownIds.has(message.toolCallId) ? <ToolCallDisclosure key={message.toolCallId || index} call={{ id: message.toolCallId || `result-${index}`, name: message.toolName || "tool", arguments: {} }} result={message} /> : null)}
-  </article>;
-}
-
-function ResponsePending({ runningTools, preparing }: { runningTools: boolean; preparing: boolean }) {
-  const title = preparing ? "Connecting…" : runningTools ? "Executing tools…" : "Waiting for response…";
-  return <div className="response-pending" role="status" aria-live="polite">
-    <span className="response-pending-dots" aria-hidden="true"><i /><i /><i /></span>
-    <span className="response-pending-copy"><strong>{title}</strong></span>
   </div>;
 }
 
@@ -387,42 +410,33 @@ function sortedTreeEntries(entries: BrowserEntry[], query: string, expandedPaths
   });
 }
 
-function FileTypeGlyph({ entry, open }: { entry: BrowserEntry; open?: boolean }) {
-  return <span className={`file-type-glyph ${entry.kind} ${open ? "open" : ""}`} aria-hidden="true"><UiIcon name={entry.kind === "directory" ? "folder" : "file"} /></span>;
+function FileIconGlyph({ entry, open }: { entry: BrowserEntry; open?: boolean }) {
+  if (entry.kind === "directory") {
+    return <span className={`node-icon folder ${open ? "open" : ""}`}>📁</span>;
+  }
+  const ext = entry.name.split(".").pop()?.toLowerCase();
+  if (ext === "tsx" || ext === "jsx") return <span className="node-icon react">⚛</span>;
+  if (ext === "ts" || ext === "js") return <span className="node-icon ts">TS</span>;
+  if (ext === "css") return <span className="node-icon css">#</span>;
+  if (ext === "json") return <span className="node-icon json">{"{}"}</span>;
+  if (ext === "md") return <span className="node-icon md">M↓</span>;
+  return <span className="node-icon generic">📄</span>;
 }
 
 function WorkspaceTree({ entries, query, expandedPaths, selectedPath, onToggle, onSelect }: { entries: BrowserEntry[]; query: string; expandedPaths: string[]; selectedPath: string; onToggle: (path: string) => void; onSelect: (entry: BrowserEntry) => void }) {
   const rows = sortedTreeEntries(entries, query, expandedPaths);
   if (!entries.length) {
-    return <div className="file-tree-empty">No files loaded. Open a workspace folder to browse.</div>;
+    return <div className="session-sub-heading">No files loaded</div>;
   }
-  return <div className="file-tree" role="tree" aria-label="Workspace files">{rows.map((entry) => {
+  return <div className="file-tree-container" role="tree" aria-label="Workspace files">{rows.map((entry) => {
     const isOpen = expandedPaths.includes(entry.path);
     const depth = pathDepth(entry.path);
-    return <button className={`file-tree-row ${entry.path === selectedPath ? "selected" : ""}`} style={{ "--tree-depth": depth } as React.CSSProperties} key={entry.path} role="treeitem" aria-expanded={entry.kind === "directory" ? isOpen : undefined} onClick={() => entry.kind === "directory" ? onToggle(entry.path) : onSelect(entry)}><span className={`tree-caret ${entry.kind === "directory" ? "" : "placeholder"}`}><Chevron open={isOpen} /></span><FileTypeGlyph entry={entry} open={isOpen} /><span className="file-tree-name">{entry.name}</span></button>;
+    return <button className={`file-tree-node ${entry.path === selectedPath ? "selected" : ""}`} style={{ "--tree-depth": depth } as React.CSSProperties} key={entry.path} role="treeitem" aria-expanded={entry.kind === "directory" ? isOpen : undefined} onClick={() => entry.kind === "directory" ? onToggle(entry.path) : onSelect(entry)}>
+      <span className={`node-caret ${entry.kind === "directory" ? "" : "placeholder"}`}><Chevron open={isOpen} /></span>
+      <FileIconGlyph entry={entry} open={isOpen} />
+      <span className="node-name">{entry.name}</span>
+    </button>;
   })}</div>;
-}
-
-function sessionDate(value: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString([], { month: "short", day: "numeric" });
-}
-
-function SessionList({ sessions, activeSessionId, editingSessionId, sessionNameDraft, onSelect, onRenameStart, onRenameChange, onRenameCommit, onRenameCancel, onDelete }: { sessions: SessionSummary[]; activeSessionId?: string; editingSessionId?: string; sessionNameDraft: string; onSelect: (session: SessionSummary) => void; onRenameStart: (session: SessionSummary) => void; onRenameChange: (value: string) => void; onRenameCommit: (session: SessionSummary) => void | Promise<void>; onRenameCancel: () => void; onDelete: (session: SessionSummary) => void | Promise<void> }) {
-  if (!sessions.length) {
-    return <div className="session-empty">{activeSessionId ? "No sessions yet. Type a message below." : "Open a workspace to see sessions."}</div>;
-  }
-  return <div className="session-list" aria-label="Sessions">{sessions.map((session) => <div className={`session-row ${session.id === activeSessionId ? "active" : ""}`} key={session.id}>
-    {editingSessionId === session.id ? <input className="session-rename-input" value={sessionNameDraft} autoFocus aria-label={`Rename session ${session.name}`} onChange={(event) => onRenameChange(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void onRenameCommit(session); } if (event.key === "Escape") onRenameCancel(); }} onBlur={() => void onRenameCommit(session)} /> : <button className="session-select" onClick={() => onSelect(session)} aria-current={session.id === activeSessionId ? "page" : undefined}><span className="session-status-dot" /><span className="session-name">{session.name}</span></button>}
-    <div className="session-row-actions"><button className="session-action" aria-label={`Rename session ${session.name}`} title="Rename session" onClick={() => onRenameStart(session)}><UiIcon name="edit" /></button><button className="session-action delete" aria-label={`Delete session ${session.name}`} title="Delete session" onClick={() => void onDelete(session)}><UiIcon name="close" /></button></div>
-  </div>)}</div>;
-}
-
-function WorkspaceAccessMenu({ mode, onChange }: { mode: WorkspaceAccessMode; onChange: (mode: WorkspaceAccessMode) => void }) {
-  return <div className="workspace-access-menu" role="menu" aria-label="Workspace access mode">
-    <div className="workspace-access-heading"><strong>Workspace access</strong><span>{WORKSPACE_ACCESS_MODE_LABELS[mode]}</span></div>
-    <div className="workspace-access-options">{WORKSPACE_ACCESS_OPTIONS.map((option) => <button className={`workspace-access-option ${option === mode ? "selected" : ""}`} key={option} role="menuitemradio" aria-checked={option === mode} onClick={() => onChange(option)}><span className="workspace-access-indicator" aria-hidden="true">{option === mode ? "✓" : ""}</span><span><strong>{WORKSPACE_ACCESS_MODE_LABELS[option]}</strong><small>{WORKSPACE_ACCESS_MODE_DESCRIPTIONS[option]}</small></span></button>)}</div>
-  </div>;
 }
 
 export function App() {
@@ -431,6 +445,7 @@ export function App() {
   const [resizingSidebar, setResizingSidebar] = useState(false);
   const [sessionsExpanded, setSessionsExpanded] = useState(true);
   const [filesExpanded, setFilesExpanded] = useState(true);
+  const [activeRailTab, setActiveRailTab] = useState<"explorer" | "sessions">("explorer");
   const [settings, setSettings] = useState<ApiSettings>(defaultSettings);
   const [workspace, setWorkspace] = useState<BrowserWorkspace>();
   const [workspaceInfo, setWorkspaceInfo] = useState<WorkspaceInfo>();
@@ -822,132 +837,161 @@ export function App() {
     void persistComposerSettings({ ...settings, reasoningLevel: level });
   };
   const busy = Boolean(agent?.busy);
-  const responsePending = requestPending || busy;
   const toolResults = new Map(messages.filter((message: any) => message.role === "toolResult").map((message: any) => [message.toolCallId, message]));
   const knownToolIds = new Set<string>(messages.flatMap((message: any) => message.role === "assistant" && Array.isArray(message.content) ? message.content.filter((block: any) => block.type === "toolCall").map((block: any) => block.id) : []));
   const transcriptGroups = groupTranscriptMessages(messages as any[]);
   const activeModelLabel = activeSelection.model.name && activeSelection.model.name !== activeSelection.model.id ? activeSelection.model.name : activeSelection.model.id;
-  const activeReasoningLabel = REASONING_LEVEL_LABELS[settings.reasoningLevel];
-  const quickActions = [
-    { title: "Inspect project structure", description: "Summarize workspace directory tree", prompt: "Inspect this workspace and summarize its structure", icon: "folder" as const },
-    { title: "Find TODOs and FIXMEs", description: "Search for pending tasks across code", prompt: "Find TODOs and FIXME comments across the codebase", icon: "search" as const },
-    { title: "Refactor code", description: "Review and improve module structure", prompt: "Suggest a focused refactor for this workspace", icon: "code" as const },
-    { title: "Ask questions", description: "Inquire about architecture or functions", prompt: "Explain the architecture of this codebase", icon: "message" as const },
-  ];
   const toggleTreePath = (path: string) => setExpandedPaths((current) => current.includes(path) ? current.filter((item) => item !== path) : [...current, path]);
   const selectFile = (entry: BrowserEntry) => {
     setSelectedFilePath(entry.path);
     setComposer((prev) => prev ? (prev.includes(entry.path) ? prev : `${prev} ${entry.path}`) : `Inspect ${entry.path}`);
   };
 
+  const otherSessions = sessions.filter((s) => s.id !== activeSession?.id);
+
   return <div ref={appShellRef} className={`app-shell ${resizingSidebar ? "resizing-sidebar" : ""}`} style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}>
-    <aside ref={sidebarRef} className="sidebar">
-      <div className="brand">
-        <span className="brand-pi">π</span>
-        <span>Pi Webdesk</span>
-        <span className="brand-tag">Local</span>
-      </div>
-      <div ref={workspacePickerRef} className="workspace-picker">
-        <button className="workspace-switcher" aria-haspopup="menu" aria-expanded={workspaceOpen} onClick={() => { setWorkspaceOpen((value) => !value); setModelPickerOpen(false); setWorkspaceFocusOpen(false); }}>
-          <span className="folder-icon"><UiIcon name="folder" /></span>
-          <span>{workspaceInfo?.name || "Open workspace"}</span>
-          <Chevron open={workspaceOpen} />
-        </button>
-        {workspaceOpen && <WorkspaceMenu saved={savedWorkspaces} activeId={workspaceInfo?.id} onOpen={openFolder} onChoose={reopenWorkspace} />}
-      </div>
-      <div className="sidebar-sections">
-        <section className={`sidebar-accordion ${sessionsExpanded ? "expanded" : ""}`}>
-          <div className="sidebar-section-header" onClick={() => setSessionsExpanded((v) => !v)}>
-            <div className="sidebar-section-title">
-              <Chevron open={sessionsExpanded} />
-              <span>Sessions</span>
-            </div>
-            <div className="sidebar-section-actions">
-              <button className="sidebar-btn" aria-label="New session" title="New session" onClick={(e) => { e.stopPropagation(); void startSession(); }}>
-                <UiIcon name="plus" />
-              </button>
-            </div>
-          </div>
-          {sessionsExpanded && <SessionList sessions={sessions} activeSessionId={activeSession?.id} editingSessionId={editingSessionId} sessionNameDraft={sessionNameDraft} onSelect={(session) => void loadExistingSession(session)} onRenameStart={beginSessionRename} onRenameChange={setSessionNameDraft} onRenameCommit={commitSessionRename} onRenameCancel={cancelSessionRename} onDelete={removeSession} />}
-        </section>
-        <section className={`sidebar-accordion ${filesExpanded ? "expanded" : ""}`}>
-          <div className="sidebar-section-header" onClick={() => setFilesExpanded((v) => !v)}>
-            <div className="sidebar-section-title">
-              <Chevron open={filesExpanded} />
-              <span>Files</span>
-            </div>
-            <div className="sidebar-section-actions">
-              {workspaceInfo && <span className="version-tag">{workspaceEntries.filter((e) => e.kind === "file").length}</span>}
-              <button className="sidebar-btn" aria-label="Refresh files" title="Refresh files" onClick={(e) => { e.stopPropagation(); void refreshWorkspaceTree(workspace, "update"); }} disabled={!workspaceInfo}>
-                <UiIcon name="refresh" />
-              </button>
-            </div>
-          </div>
-          {filesExpanded && <>
-            {workspaceInfo && <div className="file-search-wrap"><input className="file-search-input" value={fileQuery} onChange={(e) => setFileQuery(e.target.value)} placeholder="Search files..." aria-label="Search files" /></div>}
-            <WorkspaceTree entries={workspaceEntries} query={fileQuery} expandedPaths={expandedPaths} selectedPath={selectedFilePath} onToggle={toggleTreePath} onSelect={selectFile} />
-          </>}
-        </section>
-      </div>
-      <div className="sidebar-bottom">
-        <div className="sidebar-actions">
-          <button className="settings-link" onClick={() => setSettingsOpen(true)}><UiIcon name="settings" /><span>Settings</span></button>
-          <button className="theme-toggle" aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`} title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`} onClick={() => setTheme((value) => value === "dark" ? "light" : "dark")}><UiIcon name={theme === "dark" ? "sun" : "moon"} /></button>
+    <aside ref={sidebarRef} className="sidebar-container">
+      {/* 44px Left Activity Rail */}
+      <div className="activity-rail">
+        <div className="rail-logo" title="Pi Webdesk" onClick={() => startSession()}>π</div>
+        <div className="rail-items">
+          <button className={`rail-btn ${activeRailTab === "explorer" ? "active" : ""}`} title="Files & Sessions" onClick={() => setActiveRailTab("explorer")}><UiIcon name="folder" /></button>
+          <button className={`rail-btn ${activeRailTab === "sessions" ? "active" : ""}`} title="Sessions History" onClick={() => { setActiveRailTab("sessions"); setSessionsExpanded(true); }}><UiIcon name="terminal" /></button>
         </div>
-        <span className="version-tag">v0.1.0</span>
+        <div className="rail-bottom">
+          <button className="rail-btn" title="Settings" onClick={() => setSettingsOpen(true)}><UiIcon name="settings" /></button>
+          <button className="rail-btn" title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`} onClick={() => setTheme((v) => v === "dark" ? "light" : "dark")}><UiIcon name={theme === "dark" ? "sun" : "moon"} /></button>
+        </div>
+      </div>
+
+      {/* Main Sidebar Panel */}
+      <div className="sidebar-main">
+        <div ref={workspacePickerRef} className="sidebar-ws-header">
+          <button className="sidebar-ws-button" aria-haspopup="menu" aria-expanded={workspaceOpen} onClick={() => { setWorkspaceOpen((value) => !value); setModelPickerOpen(false); setWorkspaceFocusOpen(false); }}>
+            <span style={{ color: "var(--accent)" }}><UiIcon name="folder" /></span>
+            <span className="sidebar-ws-path">{workspaceInfo?.name ? `~/${workspaceInfo.name}` : "~/workspace"}</span>
+            <span className="sidebar-ws-tag">[Local]</span>
+            <Chevron open={workspaceOpen} />
+          </button>
+          {workspaceOpen && <WorkspaceMenu saved={savedWorkspaces} activeId={workspaceInfo?.id} onOpen={openFolder} onChoose={reopenWorkspace} />}
+        </div>
+
+        <div className="sidebar-body">
+          {/* SESSIONS SECTION */}
+          <section className="sidebar-section">
+            <div className="sidebar-section-title" onClick={() => setSessionsExpanded((v) => !v)}>
+              <span className="sidebar-section-label"><Chevron open={sessionsExpanded} /> Sessions</span>
+              <div className="sidebar-section-actions">
+                <button className="section-icon-btn" title="New session" onClick={(e) => { e.stopPropagation(); void startSession(); }}><UiIcon name="plus" /></button>
+              </div>
+            </div>
+            {sessionsExpanded && <div className="session-list">
+              {activeSession && <>
+                <div className="session-sub-heading">Active</div>
+                <div className="session-item active">
+                  {editingSessionId === activeSession.id ? <input className="session-rename-input" value={sessionNameDraft} autoFocus onChange={(e) => setSessionNameDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void commitSessionRename(activeSession); } if (e.key === "Escape") cancelSessionRename(); }} onBlur={() => void commitSessionRename(activeSession)} /> : <button className="session-item-main" onClick={() => loadExistingSession(activeSession)}><span className="session-dot" /><span className="session-title">{activeSession.name}</span></button>}
+                  <div className="session-item-actions">
+                    <button className="session-item-action" title="Rename" onClick={() => beginSessionRename(activeSession)}><UiIcon name="edit" /></button>
+                    <button className="session-item-action del" title="Delete" onClick={() => removeSession(activeSession)}><UiIcon name="close" /></button>
+                  </div>
+                </div>
+              </>}
+              {otherSessions.length > 0 && <>
+                <div className="session-sub-heading">Recent</div>
+                {otherSessions.map((session) => <div className="session-item" key={session.id}>
+                  {editingSessionId === session.id ? <input className="session-rename-input" value={sessionNameDraft} autoFocus onChange={(e) => setSessionNameDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void commitSessionRename(session); } if (e.key === "Escape") cancelSessionRename(); }} onBlur={() => void commitSessionRename(session)} /> : <button className="session-item-main" onClick={() => loadExistingSession(session)}><span className="session-title">{session.name}</span></button>}
+                  <div className="session-item-actions">
+                    <button className="session-item-action" title="Rename" onClick={() => beginSessionRename(session)}><UiIcon name="edit" /></button>
+                    <button className="session-item-action del" title="Delete" onClick={() => removeSession(session)}><UiIcon name="close" /></button>
+                  </div>
+                </div>)}
+              </>}
+              {!sessions.length && <div className="session-sub-heading">No active sessions</div>}
+            </div>}
+          </section>
+
+          {/* FILES SECTION */}
+          <section className="sidebar-section">
+            <div className="sidebar-section-title" onClick={() => setFilesExpanded((v) => !v)}>
+              <span className="sidebar-section-label"><Chevron open={filesExpanded} /> Files</span>
+              <div className="sidebar-section-actions">
+                <button className="section-icon-btn" title="Refresh files" onClick={(e) => { e.stopPropagation(); void refreshWorkspaceTree(workspace, "update"); }} disabled={!workspaceInfo}><UiIcon name="refresh" /></button>
+              </div>
+            </div>
+            {filesExpanded && <>
+              {workspaceInfo && <div className="file-search-box"><input className="file-search-input" value={fileQuery} onChange={(e) => setFileQuery(e.target.value)} placeholder="Search files..." aria-label="Search files" /></div>}
+              <WorkspaceTree entries={workspaceEntries} query={fileQuery} expandedPaths={expandedPaths} selectedPath={selectedFilePath} onToggle={toggleTreePath} onSelect={selectFile} />
+            </>}
+          </section>
+        </div>
       </div>
     </aside>
     <div className="sidebar-resizer" role="separator" aria-label="Resize sidebar" aria-orientation="vertical" aria-valuemin={MIN_SIDEBAR_WIDTH} aria-valuemax={MAX_SIDEBAR_WIDTH} aria-valuenow={Math.round(sidebarWidth)} tabIndex={0} title="Drag to resize · Double-click to reset" onPointerDown={(event) => { if (event.button !== 0) return; const currentWidth = sidebarRef.current?.getBoundingClientRect().width ?? sidebarWidth; sidebarResizeRef.current = { active: true, startX: event.clientX, startWidth: currentWidth, width: currentWidth }; event.currentTarget.setPointerCapture(event.pointerId); setResizingSidebar(true); }} onPointerMove={(event) => { if (!sidebarResizeRef.current.active) return; applySidebarWidth(sidebarResizeRef.current.startWidth + event.clientX - sidebarResizeRef.current.startX); }} onPointerUp={(event) => finishSidebarResize(event.currentTarget, event.pointerId)} onPointerCancel={(event) => finishSidebarResize(event.currentTarget, event.pointerId)} onDoubleClick={() => { const next = applySidebarWidth(DEFAULT_SIDEBAR_WIDTH); setSidebarWidth(next); localStorage.setItem(SIDEBAR_WIDTH_KEY, String(next)); }} onKeyDown={resizeSidebarFromKeyboard} />
+
+    {/* MAIN CANVAS */}
     <section className="app-workspace">
       <header className="topbar">
         <div className="topbar-left">
-          <span className="topbar-session-title">{activeSession?.name || "New session"}</span>
+          <span className="topbar-task-title">{activeSession?.name || "New task"}</span>
         </div>
-        <div className="topbar-status">
-          <span className={`status-pill ${apiStatus === "ready" ? "ready" : ""}`}>{apiStatus === "ready" ? "API Ready" : apiStatus === "checking" ? "Checking…" : "Offline"}</span>
+        <div className="topbar-right">
+          <button ref={modelPickerTriggerRef} className="topbar-pill" onClick={toggleModelPicker}>
+            <span>[{activeModelLabel}]</span>
+            <Chevron open={modelPickerOpen} />
+          </button>
+          <button ref={workspaceFocusTriggerRef} className="topbar-pill accent" onClick={toggleWorkspaceFocus}>
+            <span>[{WORKSPACE_ACCESS_BUTTON_LABELS[workspaceAccessMode]}]</span>
+            <Chevron open={workspaceFocusOpen} />
+          </button>
         </div>
       </header>
+
       <div className="content-grid">
         <main className="main-pane">
           {error && <div className="error-banner" role="alert"><div className="error-banner-copy"><strong>Error</strong><small>{error}</small></div><button onClick={() => setError("")} aria-label="Dismiss error">×</button></div>}
-          {workspaceInfo && !workspaceInfo.canWrite && <div className="workspace-callout warning"><strong>Permission required for {workspaceInfo.name}</strong><span>The saved folder handle is available, but the browser needs read/write approval.</span><button className="callout-button" onClick={() => setWorkspaceOpen(true)}>Grant access</button></div>}
+          {workspaceInfo && !workspaceInfo.canWrite && <div className="workspace-callout warning"><strong>Permission required for {workspaceInfo.name}</strong><span>Folder handle is saved, but the browser needs approval.</span><button className="callout-button" onClick={() => setWorkspaceOpen(true)}>Grant access</button></div>}
+
           <section className="transcript" aria-live="polite">
             <div className="transcript-inner">
-              {messages.length === 0 && <div className="empty-state">
-                <div className="empty-logo">π</div>
+              {messages.length === 0 && <div className="terminal-empty-state">
+                <div className="empty-pi-logo">π</div>
                 <h1>Pi Webdesk</h1>
-                <p>{workspaceInfo ? `Workspace: ${workspaceInfo.name}` : "Open a local folder to start reading and editing code."}</p>
-                <div className="quick-actions">{quickActions.map((action) => <button className="quick-action" key={action.title} onClick={() => setComposer(action.prompt)}><span className="quick-action-icon"><UiIcon name={action.icon} /></span><span className="quick-action-copy"><strong>{action.title}</strong><small>{action.description}</small></span></button>)}</div>
+                <p>{workspaceInfo ? `Workspace ready: ${workspaceInfo.name}` : "Open a local folder from the sidebar to begin."}</p>
               </div>}
-              {transcriptGroups.map((group) => group.role === "assistant" ? <AssistantTurn key={group.key} messages={group.messages} toolActivity={toolActivity} results={toolResults} /> : <article className="message user" key={group.key}><div className="message-meta"><span className="user-prompt-glyph">❯</span><strong>You</strong><time>{new Date((group.message as any).timestamp || Date.now()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></div><div className="message-text">{safeMarkdown(textFromMessage(group.message))}</div><CopyButton text={textFromMessage(group.message)} /></article>)}
+
+              {transcriptGroups.map((group) => group.role === "assistant" ? <AssistantTurn key={group.key} messages={group.messages} toolActivity={toolActivity} results={toolResults} /> : <div className="terminal-user-prompt" key={group.key}><span className="prompt-chevron">&gt;</span><span className="prompt-text">{textFromMessage(group.message)}</span></div>)}
+
               {Object.entries(toolActivity).filter(([id]) => !knownToolIds.has(id)).map(([id, activity]) => <ToolCallDisclosure key={id} call={{ id, name: activity.name, arguments: {} }} activity={activity} />)}
-              {responsePending && <ResponsePending preparing={requestPending && !busy} runningTools={Object.values(toolActivity).some((activity) => activity.status === "running")} />}
+
               <div ref={bottomRef} />
             </div>
           </section>
-          <footer className="composer-wrap">
-            <textarea value={composer} onChange={(event) => setComposer(event.target.value)} onKeyDown={(event) => { const enterSends = settings.sendShortcut === "enter" && event.key === "Enter" && !event.shiftKey; const modifiedEnterSends = settings.sendShortcut === "mod-enter" && event.key === "Enter" && (event.metaKey || event.ctrlKey); if (!event.nativeEvent.isComposing && (enterSends || modifiedEnterSends)) { event.preventDefault(); void send(); } }} placeholder={busy ? "Steer Pi Webdesk while it works…" : "❯ [pi] Message the agent... (Enter to send, Shift+Enter for newline)"} rows={2} />
+
+          {/* COMPOSER */}
+          <footer className="terminal-composer">
+            <div className="composer-input-row">
+              <span className="composer-prompt-prefix">&gt; [pi]</span>
+              <textarea value={composer} onChange={(event) => setComposer(event.target.value)} onKeyDown={(event) => { const enterSends = settings.sendShortcut === "enter" && event.key === "Enter" && !event.shiftKey; const modifiedEnterSends = settings.sendShortcut === "mod-enter" && event.key === "Enter" && (event.metaKey || event.ctrlKey); if (!event.nativeEvent.isComposing && (enterSends || modifiedEnterSends)) { event.preventDefault(); void send(); } }} placeholder={busy ? "Steer agent while it works…" : "Message the agent... (Enter to send, Shift+Enter for newline)"} rows={1} />
+              {busy ? <button className="stop-button" aria-label="Stop agent" title="Stop agent" onClick={() => agent?.abort()}><UiIcon name="stop" /></button> : <button className="composer-send-btn" aria-label="Send message" title="Send message" onClick={() => void send()} disabled={!composer.trim()}>➤</button>}
+            </div>
+            <div className="composer-meta-row">
+              <div className="composer-chips">
+                <button className="composer-chip" onClick={toggleModelPicker}>Model: {activeModelLabel}</button>
+                <button className="composer-chip" onClick={toggleWorkspaceFocus}>Mode: {WORKSPACE_ACCESS_BUTTON_LABELS[workspaceAccessMode]}</button>
+              </div>
+              <div className="composer-stats">
+                {workspaceInfo && <span>{workspaceInfo.name}</span>}
+                <span>{apiStatus === "ready" ? "● Ready" : "○ Offline"}</span>
+              </div>
+            </div>
+
             {workspaceFocusOpen && <div ref={workspaceFocusAnchorRef} className="workspace-access-anchor"><WorkspaceAccessMenu mode={workspaceAccessMode} onChange={chooseWorkspaceAccessMode} /></div>}
             {modelPickerOpen && <div ref={modelPickerAnchorRef} className="composer-picker-anchor"><ComposerSelectionPicker models={availableComposerModels} activeModelKey={`${activeSelection.provider.id}:${activeSelection.model.id}`} activeModel={activeSelection} selectedReasoning={settings.reasoningLevel} catalogState={composerCatalogs[activeSelection.provider.id]} onSelectModel={chooseComposerModel} onSelectReasoning={chooseComposerReasoning} onManage={() => { setSettingsOpen(true); setModelPickerOpen(false); }} /></div>}
-            <div className="composer-actions">
-              <button ref={modelPickerTriggerRef} className={`composer-btn-pill ${modelPickerOpen ? "open" : ""}`} aria-label={`Choose model: ${activeModelLabel}`} title={`${activeSelection.provider.name} · ${activeModelLabel} · ${activeReasoningLabel}`} onClick={toggleModelPicker}>
-                <span>{activeModelLabel}</span>
-                <span style={{ color: "var(--accent)", fontSize: "10px" }}>{activeReasoningLabel}</span>
-                <Chevron open={modelPickerOpen} />
-              </button>
-              <button ref={workspaceFocusTriggerRef} className={`composer-btn-pill ${workspaceFocusOpen ? "open" : ""}`} aria-label={`Workspace access: ${WORKSPACE_ACCESS_MODE_LABELS[workspaceAccessMode]}`} aria-haspopup="menu" aria-expanded={workspaceFocusOpen} title={`Workspace access: ${WORKSPACE_ACCESS_MODE_LABELS[workspaceAccessMode]}`} onClick={toggleWorkspaceFocus}>
-                <span>{WORKSPACE_ACCESS_BUTTON_LABELS[workspaceAccessMode]}</span>
-                <Chevron open={workspaceFocusOpen} />
-              </button>
-              <span className="composer-actions-spacer" />
-              {workspaceInfo && <span className="composer-status-info">{workspaceInfo.name}</span>}
-              {busy && <button className="stop-button" aria-label="Stop agent" title="Stop agent" onClick={() => agent?.abort()}><UiIcon name="stop" /></button>}
-              <button className="send-button" aria-label={busy ? "Steer agent" : "Send message"} title={busy ? "Steer agent" : "Send message"} onClick={() => void send()} disabled={!composer.trim()}><UiIcon name="send" /></button>
-            </div>
           </footer>
         </main>
       </div>
     </section>
+
     {settingsOpen && <SettingsDialog settings={settings} apiStatus={apiStatus} onTest={() => void testApi()} onChange={updateSettings} onProvidersChanged={() => void refreshServerCatalog()} onClose={() => setSettingsOpen(false)} />}
   </div>;
 }
@@ -1000,7 +1044,7 @@ function SettingsDialog({ settings, apiStatus, onTest, onChange, onProvidersChan
       await onChange({ ...settings, ...draft, baseUrl: "/api", apiKey: "", rememberKey: false });
       onClose();
     } catch {
-      // The parent displays the persistence error and leaves the dialog open.
+      // Keep open on failure
     } finally {
       setSaving(false);
     }
@@ -1008,11 +1052,10 @@ function SettingsDialog({ settings, apiStatus, onTest, onChange, onProvidersChan
   return <Dialog title="Application settings" onClose={onClose}>
     <section className="provider-editor"><div className="provider-editor-heading"><div><strong>Server API</strong><small>Provider URLs and keys are server-side only.</small></div><div className="provider-api-actions"><button className="ghost-button" onClick={onTest} disabled={apiStatus === "checking" || saving}><UiIcon name="check" />{apiStatus === "checking" ? "Checking…" : "Check server API"}</button><span className={`api-connected ${apiStatus === "ready" ? "ready" : ""}`}>{apiStatus === "ready" ? "✓ Connected" : "Not connected"}</span></div></div></section>
     <ProviderAdmin onChanged={onProvidersChanged} />
-    <label className="setting-field"><span className="field-title">Max output tokens</span><small className="field-helper">Maximum number of tokens for model responses</small><input type="number" min="256" max="32768" value={draft.maxOutputTokens} onChange={(event) => updateDraft("maxOutputTokens", Number(event.target.value) || 4096)} /></label>
-    <label className="setting-field"><span className="field-title">Custom prompt</span><small className="field-helper">Added to the built-in instructions for every new agent session. It does not replace browser and workspace constraints.</small><textarea value={draft.userPrompt} maxLength={8000} rows={6} onChange={(event) => updateDraft("userPrompt", event.target.value)} placeholder="For example: Prefer concise answers and explain risky changes before applying them." /></label>
+    <label className="setting-field"><span className="field-title">Max output tokens</span><input type="number" min="256" max="32768" value={draft.maxOutputTokens} onChange={(event) => updateDraft("maxOutputTokens", Number(event.target.value) || 4096)} /></label>
+    <label className="setting-field"><span className="field-title">Custom prompt</span><textarea value={draft.userPrompt} maxLength={8000} rows={4} onChange={(event) => updateDraft("userPrompt", event.target.value)} placeholder="For example: Prefer concise answers and explain risky changes before applying them." /></label>
     <fieldset className="shortcut-setting"><legend className="field-title">Send messages</legend><div className="shortcut-options"><label><input type="radio" name="send-shortcut" checked={draft.sendShortcut === "enter"} onChange={() => updateDraft("sendShortcut", "enter")} /><span><strong>Enter</strong><small>Shift+Enter adds a new line</small></span></label><label><input type="radio" name="send-shortcut" checked={draft.sendShortcut === "mod-enter"} onChange={() => updateDraft("sendShortcut", "mod-enter")} /><span><strong>⌘/Ctrl + Enter</strong><small>Enter adds a new line</small></span></label></div></fieldset>
-    <p className="dialog-note"><UiIcon name="info" /> <span>Provider changes are applied on the server. Model and reasoning choices appear in the composer after saving or importing them.</span></p>
-    <div className="dialog-actions"><button className="send-button" onClick={() => void save()} disabled={saving}>{saving ? "Saving…" : "Save settings"}</button></div>
+    <div className="dialog-actions"><button className="wide-button" onClick={() => void save()} disabled={saving}>{saving ? "Saving…" : "Save settings"}</button></div>
   </Dialog>;
 }
 
@@ -1021,5 +1064,12 @@ function WorkspaceMenu({ saved, activeId, onOpen, onChoose }: { saved: Workspace
     <div className="workspace-menu-heading"><strong>Workspace</strong><span>{saved.length ? `${saved.length} saved` : "No saved folders"}</span></div>
     <button className="workspace-menu-open" role="menuitem" onClick={() => void onOpen()}><UiIcon name="folder" /><span>Open folder</span></button>
     {saved.length > 0 ? <><div className="workspace-menu-section-label">RECENT FOLDERS</div><div className="saved-workspaces">{saved.map((record) => <button role="menuitem" className={`saved-workspace ${activeId === record.id ? "selected" : ""}`} key={record.id} aria-current={activeId === record.id ? "page" : undefined} onClick={() => void onChoose(record)}><span>{record.name}</span><small>{record.permission === "granted" ? "Access ready" : "Click to grant access"}</small></button>)}</div></> : <p className="workspace-menu-empty">Choose a folder to browse it in the workspace.</p>}
+  </div>;
+}
+
+function WorkspaceAccessMenu({ mode, onChange }: { mode: WorkspaceAccessMode; onChange: (mode: WorkspaceAccessMode) => void }) {
+  return <div className="workspace-access-menu" role="menu" aria-label="Workspace access mode">
+    <div className="workspace-access-heading"><strong>Workspace access</strong><span>{WORKSPACE_ACCESS_MODE_LABELS[mode]}</span></div>
+    <div className="workspace-access-options">{WORKSPACE_ACCESS_OPTIONS.map((option) => <button className={`workspace-access-option ${option === mode ? "selected" : ""}`} key={option} role="menuitemradio" aria-checked={option === mode} onClick={() => onChange(option)}><span className="workspace-access-indicator" aria-hidden="true">{option === mode ? "✓" : ""}</span><span><strong>{WORKSPACE_ACCESS_MODE_LABELS[option]}</strong><small>{WORKSPACE_ACCESS_MODE_DESCRIPTIONS[option]}</small></span></button>)}</div>
   </div>;
 }
