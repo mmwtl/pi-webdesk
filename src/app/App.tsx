@@ -238,7 +238,7 @@ function LogoMark() {
   return <svg className="logo-mark" viewBox="0 0 800 800" aria-hidden="true"><path fill="currentColor" fillRule="evenodd" d="M165.29 165.29h352.07V400H400v117.36H282.65v117.36H165.29zM282.65 282.65V400H400V282.65z" /><path fill="currentColor" d="M517.36 400h117.36v234.72H517.36z" /></svg>;
 }
 
-function UiIcon({ name }: { name: "folder" | "plus" | "edit" | "close" | "settings" | "send" | "stop" | "sun" | "moon" | "search" | "filter" | "file" | "globe" | "eye" | "refresh" | "check" | "info" | "code" | "message" | "arrow-right" | "spark" }) {
+function UiIcon({ name }: { name: "folder" | "plus" | "edit" | "close" | "settings" | "send" | "stop" | "sun" | "moon" | "search" | "filter" | "file" | "globe" | "eye" | "refresh" | "check" | "info" | "code" | "message" | "arrow-right" | "spark" | "copy" }) {
   let paths: React.ReactNode;
   if (name === "folder") paths = <><path d="M2.5 5.5h4l1.5 1.7h5.5v5.3h-11z" /><path d="M2.5 5.5V4h4l1.4 1.5" /></>;
   else if (name === "plus") paths = <path d="M8 3v10M3 8h10" />;
@@ -261,8 +261,32 @@ function UiIcon({ name }: { name: "folder" | "plus" | "edit" | "close" | "settin
   else if (name === "message") paths = <path d="M3 3.2h10v7.1H7.7L4.3 13v-2.7H3z" />;
   else if (name === "arrow-right") paths = <path d="M2.5 8h10.5M9 4l4 4-4 4" />;
   else if (name === "spark") paths = <><path d="m8 1.8 1.3 3.4 3.4 1.3-3.4 1.3L8 11.2 6.7 7.8 3.3 6.5l3.4-1.3z" /><path d="m12.4 10.4.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5z" /></>;
+  else if (name === "copy") paths = <><rect x="5.5" y="5.5" width="7.5" height="7.5" rx="1.5" /><path d="M3.5 10.5h-1a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v1" /></>;
   else paths = null;
   return <svg className={`ui-icon ${name}`} viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.45" strokeLinecap="round" strokeLinejoin="round">{paths}</svg>;
+}
+
+function CopyButton({ text, className = "" }: { text: string; className?: string }) {
+  const [copied, setCopied] = useState(false);
+  const timeoutRef = useRef<number | undefined>(undefined);
+
+  const handleCopy = async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      if (timeoutRef.current) window.clearTimeout(timeoutRef.current);
+      timeoutRef.current = window.setTimeout(() => setCopied(false), 1800);
+    } catch {}
+  };
+
+  useEffect(() => () => { if (timeoutRef.current) window.clearTimeout(timeoutRef.current); }, []);
+
+  return <button className={`message-copy-button ${copied ? "copied" : ""} ${className}`} aria-label={copied ? "Copied to clipboard" : "Copy message"} title={copied ? "Copied!" : "Copy message"} onClick={handleCopy} type="button">
+    <UiIcon name={copied ? "check" : "copy"} />
+    {copied && <span className="copy-tooltip">Copied</span>}
+  </button>;
 }
 
 function Chevron({ open }: { open: boolean }) {
@@ -303,15 +327,39 @@ function ToolCallDisclosure({ call, activity, result }: { call: { id: string; na
 
 function AssistantSegment({ message, toolActivity, results }: { message: any; toolActivity: Record<string, ToolActivity>; results: Map<string, any> }) {
   const calls = Array.isArray(message.content) ? message.content.filter((block: any) => block.type === "toolCall") : [];
-  const text = textFromMessage(message);
+  const text = typeof message?.content === "string" ? message.content : Array.isArray(message?.content) ? message.content.map((block: any) => block.type === "text" ? block.text : "").filter(Boolean).join("\n") : "";
   const thinking = thinkingFromMessage(message);
-  return <div className="assistant-segment">{thinking && <details className="thinking-disclosure"><summary>Reasoning</summary><div className="thinking-text">{safeMarkdown(thinking)}</div></details>}{text && <div className="message-text">{safeMarkdown(text)}</div>}{calls.length > 0 && <div className="tool-stack">{calls.map((call: any) => <ToolCallDisclosure key={call.id} call={call} activity={toolActivity[call.id]} result={results.get(call.id)} />)}</div>}</div>;
+  const errorMessage = message?.errorMessage ? summarizeError(message.errorMessage) : null;
+  return <div className="assistant-segment">
+    {thinking && <details className="thinking-disclosure"><summary>Reasoning</summary><div className="thinking-text">{safeMarkdown(thinking)}</div></details>}
+    {text && <div className="message-text">{safeMarkdown(text)}</div>}
+    {errorMessage && <div className="message-error"><UiIcon name="info" /><span>Request failed: {errorMessage}</span></div>}
+    {calls.length > 0 && <div className="tool-stack">{calls.map((call: any) => <ToolCallDisclosure key={call.id} call={call} activity={toolActivity[call.id]} result={results.get(call.id)} />)}</div>}
+  </div>;
 }
 
 function AssistantTurn({ messages, toolActivity, results }: { messages: any[]; toolActivity: Record<string, ToolActivity>; results: Map<string, any> }) {
   const knownIds = new Set(messages.flatMap((message) => message.role === "assistant" && Array.isArray(message.content) ? message.content.filter((block: any) => block.type === "toolCall").map((block: any) => block.id) : []));
   const timestamped = messages.find((message) => message.role === "assistant") ?? messages[0];
-  return <article className="message assistant"><div className="message-body"><div className="message-meta"><strong>Pi Webdesk</strong><time>{new Date(timestamped?.timestamp || Date.now()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></div>{messages.map((message, index) => message.role === "assistant" ? <AssistantSegment key={index} message={message} toolActivity={toolActivity} results={results} /> : message.role === "toolResult" && !knownIds.has(message.toolCallId) ? <ToolCallDisclosure key={message.toolCallId || index} call={{ id: message.toolCallId || `result-${index}`, name: message.toolName || "tool", arguments: {} }} result={message} /> : null)}</div></article>;
+  const fullText = messages
+    .filter((m) => m.role === "assistant")
+    .map((m) => textFromMessage(m))
+    .filter(Boolean)
+    .join("\n\n");
+
+  return <article className="message assistant">
+    <div className="message-body">
+      <div className="message-meta">
+        <div className="message-meta-title">
+          <span className="assistant-badge"><UiIcon name="spark" /></span>
+          <strong>Pi Webdesk</strong>
+          <time>{new Date(timestamped?.timestamp || Date.now()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>
+        </div>
+      </div>
+      {messages.map((message, index) => message.role === "assistant" ? <AssistantSegment key={index} message={message} toolActivity={toolActivity} results={results} /> : message.role === "toolResult" && !knownIds.has(message.toolCallId) ? <ToolCallDisclosure key={message.toolCallId || index} call={{ id: message.toolCallId || `result-${index}`, name: message.toolName || "tool", arguments: {} }} result={message} /> : null)}
+    </div>
+    {fullText && <CopyButton text={fullText} />}
+  </article>;
 }
 
 function ResponsePending({ runningTools, preparing }: { runningTools: boolean; preparing: boolean }) {
@@ -863,7 +911,7 @@ export function App() {
           {workspaceInfo && !workspaceInfo.canWrite && <div className="workspace-callout warning"><strong>Permission required for {workspaceInfo.name}</strong><span>The saved folder handle is available, but the browser needs a fresh read/write approval.</span><button className="callout-button" onClick={() => setWorkspaceOpen(true)}>Grant access</button></div>}
           <section className="transcript" aria-live="polite">
             {messages.length === 0 && <div className="empty-state"><div className="empty-badge"><UiIcon name="spark" /><span>Browser workspace agent</span></div><h1>How can I help you with your workspace?</h1><p>I can read, edit and organize files in your workspace.</p><div className="quick-actions">{quickActions.map((action) => <button className="quick-action" key={action.title} onClick={() => setComposer(action.prompt)}><span className="quick-action-icon"><UiIcon name={action.icon} /></span><span className="quick-action-copy"><strong>{action.title}</strong><small>{action.description}</small></span><UiIcon name="arrow-right" /></button>)}</div></div>}
-            {transcriptGroups.map((group) => group.role === "assistant" ? <AssistantTurn key={group.key} messages={group.messages} toolActivity={toolActivity} results={toolResults} /> : <article className="message user" key={group.key}><div className="message-body"><div className="message-meta"><strong>You</strong><time>{new Date((group.message as any).timestamp || Date.now()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></div><div className="message-text">{safeMarkdown(textFromMessage(group.message))}</div></div></article>)}
+            {transcriptGroups.map((group) => group.role === "assistant" ? <AssistantTurn key={group.key} messages={group.messages} toolActivity={toolActivity} results={toolResults} /> : <article className="message user" key={group.key}><div className="message-body"><div className="message-meta"><strong>You</strong><time>{new Date((group.message as any).timestamp || Date.now()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></div><div className="message-text">{safeMarkdown(textFromMessage(group.message))}</div></div><CopyButton text={textFromMessage(group.message)} /></article>)}
             {Object.entries(toolActivity).filter(([id]) => !knownToolIds.has(id)).map(([id, activity]) => <ToolCallDisclosure key={id} call={{ id, name: activity.name, arguments: {} }} activity={activity} />)}
             {responsePending && <ResponsePending preparing={requestPending && !busy} runningTools={Object.values(toolActivity).some((activity) => activity.status === "running")} />}
             <div ref={bottomRef} />

@@ -213,15 +213,144 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus
   .empty-state { margin-left: 121px; }
 }
 
-.message { margin: 0 0 32px; content-visibility: auto; contain-intrinsic-size: auto 130px; }
+.message { position: relative; margin: 0 0 26px; content-visibility: auto; contain-intrinsic-size: auto 130px; }
 .message-body { min-width: 0; }
-.message-meta { display: flex; align-items: baseline; gap: 9px; margin-bottom: 8px; }
-.message-meta strong { color: var(--text); font-size: 12px; font-weight: 650; }
-.message.assistant .message-meta strong { color: var(--accent-strong); }
+.message-meta { display: flex; align-items: baseline; gap: 8px; margin-bottom: 7px; }
+.message-meta strong { color: var(--text); font-size: 11.5px; font-weight: 650; }
+.message.assistant .message-meta strong { color: var(--accent-strong); font-size: 12px; }
 .message-meta time { color: var(--quiet); font-size: 10px; }
+.message-meta-title { display: flex; align-items: center; gap: 7px; }
+.assistant-badge { width: 18px; height: 18px; border-radius: 5px; background: var(--accent-soft); color: var(--accent-strong); display: inline-flex; align-items: center; justify-content: center; }
+.assistant-badge .ui-icon { width: 11px; height: 11px; }
+
 .message-text { max-width: 820px; color: var(--text-soft); font-size: 13px; line-height: 1.62; white-space: pre-wrap; }
-.message.user { width: 100%; padding: 13px 15px; border-radius: 10px; background: var(--surface-active); }
-.message.user .message-text { color: var(--text); }
+
+.message.user {
+  width: fit-content;
+  max-width: 82%;
+  margin-left: auto;
+  padding: 10px 14px 11px;
+  border-radius: 16px 16px 4px 16px;
+  background: var(--surface-active);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+.message.user .message-meta {
+  margin-bottom: 4px;
+  gap: 7px;
+  padding-right: 28px;
+}
+.message.user .message-meta strong {
+  font-size: 11px;
+}
+.message.user .message-meta time {
+  font-size: 9.5px;
+}
+.message.user .message-text {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.message.assistant {
+  width: 100%;
+  margin-right: auto;
+  padding-top: 2px;
+}
+.message.assistant .message-meta {
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.message-copy-button {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line), 0 2px 5px var(--shadow);
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  opacity: 0;
+  pointer-events: none;
+  cursor: pointer;
+  transition: opacity .16s ease, background .16s ease, color .16s ease, transform .16s ease;
+  z-index: 4;
+}
+.message.assistant .message-copy-button {
+  top: 2px;
+  right: 0;
+}
+.message:hover .message-copy-button,
+.message:focus-within .message-copy-button {
+  opacity: 1;
+  pointer-events: auto;
+}
+.message-copy-button:hover {
+  background: var(--surface-hover);
+  color: var(--accent-strong);
+  transform: scale(1.04);
+}
+.message-copy-button.copied {
+  opacity: 1;
+  pointer-events: auto;
+  color: var(--success);
+  background: var(--surface-active);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.message-copy-button .ui-icon {
+  width: 13px;
+  height: 13px;
+}
+
+.copy-tooltip {
+  position: absolute;
+  right: calc(100% + 6px);
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: copy-tip-enter .15s ease both;
+}
+@keyframes copy-tip-enter {
+  from { opacity: 0; transform: translate(4px, -50%); }
+  to { opacity: 1; transform: translate(0, -50%); }
+}
+
+.message-error {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--error-bg);
+  box-shadow: inset 0 0 0 1px var(--error-border);
+  color: var(--error-text);
+  font-size: 12px;
+  line-height: 1.45;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.message-error .ui-icon {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  margin-top: 1px;
+}
+
 .assistant-segment + .assistant-segment { margin-top: 14px; }
 .message-text > :first-child { margin-top: 0; }
 .message-text > :last-child { margin-bottom: 0; }
@@ -242,13 +371,16 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus
 .message-text code { padding: 2px 5px; border: 0; border-radius: 4px; background: var(--code); color: var(--accent-strong); font: .86em/1.2 ui-monospace, SFMono-Regular, Consolas, monospace; }
 .code-block { margin: 13px 0 15px; padding: 12px; border: 0; border-radius: 8px; background: var(--code); color: var(--text-soft); font: 11px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; overflow: auto; }
 .message-text .code-block code { padding: 0; background: none; color: inherit; font: inherit; }
-.thinking-disclosure { margin: 0 0 11px; max-width: 760px; }
-.thinking-disclosure summary { width: fit-content; cursor: pointer; list-style: none; color: var(--quiet); font-size: 10px; font-weight: 600; }
+
+.thinking-disclosure { margin: 6px 0 12px; max-width: 760px; border-radius: 8px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; }
+.thinking-disclosure summary { padding: 6px 10px; width: 100%; cursor: pointer; list-style: none; color: var(--muted); font-size: 10.5px; font-weight: 600; display: flex; align-items: center; gap: 6px; user-select: none; transition: background .15s ease, color .15s ease; }
+.thinking-disclosure summary:hover { color: var(--text); background: var(--surface-hover); }
 .thinking-disclosure summary::-webkit-details-marker { display: none; }
-.thinking-disclosure summary::before { content: "▸"; display: inline-block; margin-right: 5px; transition: transform .16s ease; }
+.thinking-disclosure summary::before { content: "▸"; display: inline-block; font-size: 10px; transition: transform .16s ease; }
 .thinking-disclosure[open] summary::before { transform: rotate(90deg); }
-.thinking-text { margin-top: 7px; padding: 7px 10px; box-shadow: inset 1px 0 0 var(--line-strong); color: var(--quiet); font-size: 10.5px; line-height: 1.5; }
+.thinking-text { padding: 8px 12px 10px; box-shadow: inset 0 1px 0 var(--line); color: var(--text-soft); font-size: 11px; line-height: 1.55; background: var(--code); }
 .thinking-text p { margin: 0 0 7px; }
+.thinking-text p:last-child { margin-bottom: 0; }
 
 .tool-stack { max-width: 820px; margin-top: 15px; border-radius: 9px; overflow: hidden; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
 .tool-disclosure { background: transparent; box-shadow: inset 0 -1px 0 var(--line); }
