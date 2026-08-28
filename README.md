@@ -1,86 +1,62 @@
 # Pi Webdesk
 
-Pi Webdesk is a browser-only coding agent for local workspaces. It runs in a desktop browser, connects directly to an OpenAI-compatible API, and lets you inspect, search, and edit a folder you explicitly choose.
+Pi Webdesk is a browser-based coding agent for a locally selected workspace. The browser runs the React UI, Pi runtime, and File System Access API tools. Vercel Functions hold the upstream provider credentials and proxy Chat Completions requests.
 
-> Early-stage software (`v0.1.0`). The browser-only architecture is intentional: there is no backend, shell, or local server in the product.
-
-## Screenshots
-
-<p align="center">
-  <img src="docs/screenshots/home.jpg" alt="Pi Webdesk empty workspace" width="49%" />
-  <img src="docs/screenshots/settings.jpg" alt="Pi Webdesk provider settings" width="49%" />
-</p>
-<p align="center">
-  <img src="docs/screenshots/access-modes.jpg" alt="Pi Webdesk workspace access modes" width="49%" />
-  <img src="docs/screenshots/model-picker.jpg" alt="Pi Webdesk model and reasoning picker" width="49%" />
-</p>
+> Early-stage software (`v0.1.0`). The backend does not get shell or filesystem access.
 
 ## What it does
 
-- Runs the Pi agent runtime in the browser.
-- Sends requests directly to the configured OpenAI-compatible Chat Completions endpoint with streaming responses.
-- Opens a local project folder through the File System Access API.
-- Provides browser-native tools for `read`, `ls`, `find`, `grep`, `edit`, `write`, `apply_patch`, and `delete`.
-- Supports multiple providers, model catalogs, and per-request reasoning levels.
-- Stores settings, sessions, and saved folder handles in IndexedDB. API keys are persisted only when you enable the provider-level **Remember** option.
-- Offers three workspace access modes: read only, write with confirmation, and write directly.
+- Streams OpenAI-compatible Chat Completions through same-origin `/api` routes.
+- Keeps provider URLs and API keys out of the browser.
+- Lets an administrator add, disable, discover, and remove providers and models in **Settings**.
+- Encrypts provider keys in Postgres with AES-256-GCM before storage.
+- Opens one local folder through the File System Access API and exposes browser-native read/edit/search tools to Pi.
+- Stores UI preferences, sessions, and directory handles in IndexedDB; it never stores provider keys there.
 
 ## Requirements
 
-- Node.js `^20.19.0` or `>=22.12.0` for the development toolchain.
-- Desktop Chrome or Edge 120+ for local folder access.
-- An OpenAI-compatible API endpoint that is reachable over HTTPS and allows CORS requests from the app origin.
+- Node.js `^20.19.0` or `>=22.12.0`.
+- Desktop Chrome or Edge 120+ for `showDirectoryPicker()`.
+- A Vercel project and Neon/Postgres database.
 
-Safari and Firefox are not part of the current support target because the app depends on `showDirectoryPicker()` for selecting an arbitrary local folder.
+## Run locally
 
-## Development
-
-Install dependencies and start the Vite development server:
+Install dependencies, create a local `.env` from [`.env.example`](.env.example), then use Vercel's local runtime so both Vite and Functions run together:
 
 ```bash
 npm install
-npm run dev
+npx vercel dev
 ```
 
-Open the local URL printed by Vite. Then:
+`npm run dev` still starts only the Vite frontend and is useful for UI work, but it cannot serve `/api` functions by itself.
 
-1. Open **Settings** and add a provider, base URL, API key, and model.
-2. Click **Open workspace** and choose a project folder.
-3. Select the workspace access mode that fits the task.
-4. Send a request or use one of the starter actions.
+Open the URL printed by Vercel. In **Settings**, sign in with `ADMIN_PASSWORD`, add an OpenAI-compatible provider, enter its API key, and either discover or add the models. The key is sent only to the same-origin admin endpoint and is never returned to the browser.
 
-## Configuration
+## Deploy to Vercel
 
-Provider settings support any API with an OpenAI-compatible Chat Completions interface. You can configure:
+1. Create or connect a Neon Postgres database. Vercel's Marketplace integration is the easiest path.
+2. In Vercel Project Settings → Environment Variables, add these values for each required environment:
 
-- provider name and base URL;
-- API key, with optional browser-only persistence;
-- one or more model IDs, entered manually or loaded from the provider catalog;
-- maximum output tokens;
-- a custom prompt appended to the built-in browser/workspace instructions;
-- the keyboard shortcut used to send messages.
+   - `DATABASE_URL` — Neon/Postgres connection string;
+   - `CONFIG_ENCRYPTION_KEY` — exactly 32 random bytes, normally 64 hex characters (`openssl rand -hex 32`);
+   - `ADMIN_PASSWORD` — long, unique administrator password;
+   - `SESSION_SECRET` — random HMAC secret (`openssl rand -base64 48`).
 
-The configured provider must allow the browser app's origin in its CORS policy. Pi Webdesk cannot bypass CORS or mixed-content restrictions.
+   Mark the last three as **Sensitive** variables where that option is available. Never place provider keys in Vercel environment variables or frontend `VITE_*` variables: enter them through Settings instead.
 
-## Workspace access
+3. Deploy the repository. [`vercel.json`](vercel.json) builds Vite, keeps `/api/*` routed to Functions, and sends all other paths to the SPA entry point.
+4. Open **Settings**, sign in, and configure providers/models once. They are persisted in Postgres.
 
-| Mode | Behavior |
-| --- | --- |
-| **Read only** | Inspect and search files; changes are disabled. |
-| **Write with confirmation** | Ask before every edit, write, patch, or delete. |
-| **Write directly** | Apply file changes immediately. |
+Provider CORS errors go away for model traffic because the browser talks only to its own `/api` origin; the Function calls the provider server-to-server. This does not make the admin UI public: its write endpoints require the signed, HTTP-only administrator session.
 
-The agent can access only the folder selected through the browser picker. It does not receive arbitrary absolute paths.
+The configured 60-second Function duration is the portable Vercel baseline. Long-running streams need a Vercel plan and a corresponding `maxDuration` increase; Vercel will otherwise terminate them.
 
-## Production build and deployment
+## Security notes
 
-Build the static site:
-
-```bash
-npm run build
-```
-
-Deploy the contents of `dist/` to any static HTTPS host. No backend, WebSocket server, database, or separate runtime is required after the build. The API endpoint still needs to allow CORS from the deployed site origin.
+- API keys are AES-256-GCM encrypted at rest. Losing `CONFIG_ENCRYPTION_KEY` makes existing keys unrecoverable; changing it requires re-entering the provider keys.
+- The admin session is an HTTP-only, `SameSite=Strict`, signed cookie, with an additional same-origin check for writes. Put the site behind your own identity layer if several people should administer it.
+- Chat requests are limited to enabled models attached to the selected enabled provider. Browser-supplied upstream URLs and `Authorization` headers are ignored.
+- The application still sends requested workspace content to whichever provider the administrator configures. Use providers you trust.
 
 ## Verification
 
@@ -90,37 +66,19 @@ npm test
 npm run build
 ```
 
-## Deliberate limitations
+## Browser boundary
 
-Because the product runs entirely in a browser, it cannot:
-
-- run shell commands, Git, tests, builds, or other local processes;
-- watch external file changes with a native file watcher;
-- work with paths outside the selected workspace;
-- continue running after the page is closed.
-
-Run project commands separately in a local terminal.
-
-## Built on Pi
-
-Pi Webdesk is based on [Pi](https://github.com/earendil-works/pi), created by Mario Zechner and contributors. Thank you to the Pi project for the agent runtime and its small, composable foundation.
-
-This project uses `@earendil-works/pi-agent-core` and `@earendil-works/pi-ai`, then adapts the Pi workflow to browser-only workspace access. Pi Webdesk is not the original Pi distribution; see [NOTICE.md](NOTICE.md) for attribution and third-party notices.
+The agent can access only the folder selected in the browser. It cannot run shell commands, Git, tests, builds, native watchers, or access paths outside that folder. These remain terminal tasks outside the app.
 
 ## Project structure
 
-See the more detailed [architecture description](docs/architecture.md) for the runtime flow, browser boundaries, and persistence model.
-
 ```text
-src/
-├── agent/        Pi runtime adapter and OpenAI-compatible fetch
-├── app/          React UI, state, sessions, and routing
-├── filesystem/   File System Access API workspace layer
-├── persistence/  IndexedDB settings, workspaces, and sessions
-├── tools/        Browser-native file tools
-└── workers/      Background file search
+api/              Vercel Functions, auth, encrypted Postgres configuration
+src/agent/        Pi runtime adapter and same-origin fetch guard
+src/app/          React UI and provider administration
+src/filesystem/   File System Access API workspace layer
+src/persistence/  IndexedDB sessions/settings/workspaces (no API keys)
+src/tools/        Browser-native file tools
 ```
 
-## License and notices
-
-Third-party attribution and license information is collected in [NOTICE.md](NOTICE.md). The repository does not include the original Pi distribution; it uses the published Pi packages listed above.
+Pi Webdesk uses [Pi](https://github.com/earendil-works/pi) packages from Mario Zechner and contributors. See [NOTICE.md](NOTICE.md) for attribution.

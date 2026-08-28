@@ -2,6 +2,14 @@ import { defaultSettings, normalizeReasoningLevel, type ApiSettings, type Provid
 import { idbGet, idbPut } from "./database.ts";
 
 const SETTINGS_KEY = "current";
+const SERVER_PROVIDER: ProviderProfile = {
+  id: "server-api",
+  name: "Server API",
+  baseUrl: "/api",
+  apiKey: "",
+  rememberKey: false,
+  models: [],
+};
 let saveQueue: Promise<void> = Promise.resolve();
 type StoredSettings = Partial<ApiSettings> & { reasoningEnabled?: boolean };
 
@@ -30,42 +38,44 @@ function normalizeProvider(value: unknown, fallback: ProviderProfile, index: num
   };
 }
 
+function browserSafeProvider(provider: ProviderProfile): ProviderProfile {
+  return { ...provider, baseUrl: "/api", apiKey: "", rememberKey: false };
+}
+
 export async function loadSettings(): Promise<ApiSettings> {
   const stored = await idbGet<StoredSettings>("settings", SETTINGS_KEY);
   const legacyReasoningLevel = stored?.reasoningEnabled ? "medium" : "off";
   const { reasoningEnabled: _legacyReasoningEnabled, ...saved } = stored ?? {};
-  const rawProviders = Array.isArray(stored?.providers) ? stored.providers : undefined;
-  const providers = rawProviders?.length
-    ? rawProviders.map((provider, index) => normalizeProvider(provider, defaultSettings.providers[0], index))
-    : [normalizeProvider({
-      ...defaultSettings.providers[0],
-      baseUrl: stored?.baseUrl ?? defaultSettings.baseUrl,
-      apiKey: stored?.rememberKey ? stored?.apiKey ?? "" : "",
-      rememberKey: stored?.rememberKey === true,
-      models: [{ id: stored?.modelId ?? defaultSettings.modelId }],
-    }, defaultSettings.providers[0], 0)];
+  const rawProviders = Array.isArray(stored?.providers) ? stored.providers : [];
+  const providers = rawProviders.length
+    ? rawProviders.map((provider, index) => browserSafeProvider(normalizeProvider(provider, SERVER_PROVIDER, index)))
+    : [{ ...SERVER_PROVIDER, models: [{ id: stored?.modelId ?? defaultSettings.modelId }] }];
   const activeProvider = providers.find((provider) => provider.id === stored?.activeProviderId) ?? providers[0];
   const activeModel = activeProvider.models.find((model) => model.id === stored?.modelId) ?? activeProvider.models[0];
-  const activeApiKey = activeProvider.rememberKey ? activeProvider.apiKey : (stored?.rememberKey ? stored?.apiKey ?? "" : activeProvider.apiKey);
   const userPrompt = typeof stored?.userPrompt === "string" ? stored.userPrompt : defaultSettings.userPrompt;
-  return {
+  const settings: ApiSettings = {
     ...defaultSettings,
     ...saved,
     providers,
     activeProviderId: activeProvider.id,
-    baseUrl: activeProvider.baseUrl,
-    apiKey: activeApiKey,
+    baseUrl: SERVER_PROVIDER.baseUrl,
+    apiKey: "",
     modelId: activeModel?.id ?? stored?.modelId ?? defaultSettings.modelId,
-    rememberKey: activeProvider.rememberKey,
+    rememberKey: false,
     reasoningLevel: normalizeReasoningLevel(stored?.reasoningLevel ?? legacyReasoningLevel),
     userPrompt,
   };
+  const hasLegacyKey = Boolean(stored?.apiKey) || rawProviders.some((provider) => Boolean((provider as Partial<ProviderProfile>)?.apiKey));
+  if (hasLegacyKey) await saveSettings(settings);
+  return settings;
 }
 
 export function saveSettings(settings: ApiSettings): Promise<void> {
-  const providers = settings.providers.map((provider) => ({ ...provider, apiKey: provider.rememberKey ? provider.apiKey : "" }));
-  const activeProvider = providers.find((provider) => provider.id === settings.activeProviderId);
-  const value = { ...settings, providers, apiKey: settings.rememberKey ? settings.apiKey : "", ...(activeProvider ? { baseUrl: activeProvider.baseUrl, modelId: settings.modelId } : {}) };
+  const providers = settings.providers.length
+    ? settings.providers.map(browserSafeProvider)
+    : [{ ...SERVER_PROVIDER, models: [{ id: settings.modelId || defaultSettings.modelId }] }];
+  const activeProviderId = providers.some((provider) => provider.id === settings.activeProviderId) ? settings.activeProviderId : providers[0].id;
+  const value = { ...settings, providers, activeProviderId, baseUrl: SERVER_PROVIDER.baseUrl, apiKey: "", rememberKey: false };
   const write = saveQueue.then(() => idbPut("settings", value, SETTINGS_KEY));
   // A failed write must not permanently block later saves.
   saveQueue = write.catch(() => undefined);

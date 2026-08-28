@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { AgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
 import { BrowserWorkspace } from "../filesystem/BrowserWorkspace.ts";
 import type { BrowserEntry } from "../filesystem/types.ts";
-import { checkApi, fetchModelCatalog, type ApiModelRecord } from "../agent/browserFetch.ts";
+import { checkApi, fetchServerProviders, type ApiModelRecord } from "../agent/serverApi.ts";
 import { PiWebdeskAgent } from "../agent/PiWebdeskAgent.ts";
 import { sha256 } from "../persistence/hash.ts";
 import { loadSettings, saveSettings } from "../persistence/settings.ts";
@@ -12,6 +12,7 @@ import { defaultSettings, REASONING_LEVEL_LABELS, REASONING_LEVELS, WORKSPACE_AC
 import { deriveSessionName } from "./sessionName.ts";
 import { groupTranscriptMessages } from "./transcript.ts";
 import { summarizeError } from "./errors.ts";
+import { ProviderAdmin } from "./ProviderAdmin.tsx";
 import "../styles/app.css";
 
 function textFromMessage(message: any): string {
@@ -165,7 +166,22 @@ type InspectorTab = "overview" | "details";
 
 function settingsProviders(settings: ApiSettings): ProviderProfile[] {
   if (settings.providers.length > 0) return settings.providers;
-  return [{ id: "legacy-provider", name: "OpenAI-compatible", baseUrl: settings.baseUrl, apiKey: settings.apiKey, rememberKey: settings.rememberKey, models: [{ id: settings.modelId }] }];
+  return [{ id: "server-api", name: "Server API", baseUrl: "/api", apiKey: "", rememberKey: false, models: [{ id: settings.modelId }] }];
+}
+
+function applyServerProviders(settings: ApiSettings, providers: ProviderProfile[]): ApiSettings {
+  if (providers.length === 0) return settings;
+  const activeProvider = providers.find((provider) => provider.id === settings.activeProviderId) ?? providers[0];
+  const activeModel = activeProvider.models.find((model) => model.id === settings.modelId) ?? activeProvider.models[0];
+  return {
+    ...settings,
+    providers,
+    activeProviderId: activeProvider.id,
+    baseUrl: "/api",
+    apiKey: "",
+    rememberKey: false,
+    modelId: activeModel?.id ?? settings.modelId,
+  };
 }
 
 function mergeModelMetadata(model: ProviderModel, records: ApiModelRecord[] | undefined): ProviderModel {
@@ -187,10 +203,6 @@ function activeComposerModel(settings: ApiSettings, catalogs: Record<string, Com
   const baseModel = provider.models.find((item) => item.id === settings.modelId) ?? provider.models[0] ?? { id: settings.modelId };
   const model = mergeModelMetadata(baseModel, catalogs[provider.id]?.models);
   return { provider, model };
-}
-
-function newProviderId(): string {
-  return globalThis.crypto?.randomUUID?.() ?? `provider-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 function clampSidebarWidth(width: number): number {
@@ -393,13 +405,6 @@ function SessionList({ sessions, activeSessionId, editingSessionId, sessionNameD
   </div>)}</div>;
 }
 
-function providerMark(name: string): React.ReactNode {
-  const normalized = name.toLowerCase();
-  if (normalized.includes("anthropic")) return <span className="provider-mark letter">A</span>;
-  if (normalized.includes("google")) return <span className="provider-mark letter">G</span>;
-  return <span className="provider-mark"><UiIcon name="globe" /></span>;
-}
-
 function WorkspaceAccessMenu({ mode, onChange }: { mode: WorkspaceAccessMode; onChange: (mode: WorkspaceAccessMode) => void }) {
   return <div className="workspace-access-menu" role="menu" aria-label="Workspace access mode">
     <div className="workspace-access-heading"><strong>Workspace access</strong><span>{WORKSPACE_ACCESS_MODE_LABELS[mode]}</span></div>
@@ -519,14 +524,17 @@ export function App() {
       if (cancelled) return;
       if (settingsRevisionRef.current === initialSettingsRevision) {
         setSettings(loadedSettings);
-        if (loadedSettings.apiKey.trim()) {
-          setApiStatus("checking");
-          void checkApi(loadedSettings.baseUrl, loadedSettings.apiKey).then(() => {
-            if (!cancelled && settingsRevisionRef.current === initialSettingsRevision) setApiStatus("ready");
-          }).catch(() => {
-            if (!cancelled && settingsRevisionRef.current === initialSettingsRevision) setApiStatus("error");
-          });
-        }
+        setApiStatus("checking");
+        void checkApi().then(() => {
+          if (!cancelled && settingsRevisionRef.current === initialSettingsRevision) setApiStatus("ready");
+        }).catch(() => {
+          if (!cancelled && settingsRevisionRef.current === initialSettingsRevision) setApiStatus("error");
+        });
+        void fetchServerProviders().then((providers) => {
+          if (!cancelled && settingsRevisionRef.current === initialSettingsRevision) setSettings((current) => applyServerProviders(current, providers));
+        }).catch(() => {
+          // The health check below surfaces backend configuration errors without blocking local UI restoration.
+        });
       }
       setSavedWorkspaces(restored);
       const granted = restored.find((item) => item.permission === "granted");
@@ -604,7 +612,6 @@ export function App() {
   const ensureAgent = async (): Promise<PiWebdeskAgent> => {
     if (!workspace || !workspaceInfo) throw new Error("Open a workspace folder first");
     if (!workspaceInfo.canWrite && workspaceAccessMode !== "read") throw new Error("Workspace does not have write permission. Re-open the folder and grant write access.");
-    if (!settings.apiKey.trim()) throw new Error("Add an API key in Settings");
     let session = activeSession;
     if (!session) { session = await createSession(workspaceInfo.id, settings.baseUrl, settings.modelId, `${workspaceInfo.name} session`); setActiveSession(session); setSessions(await listSessions(workspaceInfo.id)); }
     agentSessionRef.current = session;
@@ -663,8 +670,9 @@ export function App() {
       const loaded = await loadSession(summary.id); if (!loaded) throw new Error("Session no longer exists");
       settingsRevisionRef.current += 1;
       discardAgent(); agentSessionRef.current = summary; setActiveSession(summary); setMessages(loaded.messages); setSettings((current) => {
-        const matchingProvider = settingsProviders(current).find((provider) => provider.baseUrl === loaded.baseUrl && provider.models.some((model) => model.id === loaded.modelId));
-        return { ...current, baseUrl: loaded.baseUrl, modelId: loaded.modelId, ...(matchingProvider ? { activeProviderId: matchingProvider.id, apiKey: matchingProvider.apiKey, rememberKey: matchingProvider.rememberKey } : {}) };
+        const matchingProvider = settingsProviders(current).find((provider) => provider.models.some((model) => model.id === loaded.modelId));
+        if (!matchingProvider) return current;
+        return { ...current, activeProviderId: matchingProvider.id, baseUrl: "/api", apiKey: "", modelId: loaded.modelId, rememberKey: false };
       }); setToolActivity({});
     } catch (reason) { setError(errorText(reason)); }
   };
@@ -719,12 +727,21 @@ export function App() {
       await syncActiveSessionModel(next);
       setError("");
     } catch (reason) {
-      if (next.apiKey.trim()) setApiStatus("error");
       setError(errorText(reason));
       throw reason;
     }
   };
-  const testApi = async (candidate = settings) => { setApiStatus("checking"); try { await checkApi(candidate.baseUrl, candidate.apiKey); setApiStatus("ready"); setError(""); } catch (reason) { setApiStatus("error"); setError(errorText(reason)); } };
+  const testApi = async (_candidate = settings) => { setApiStatus("checking"); try { await checkApi(); setApiStatus("ready"); setError(""); } catch (reason) { setApiStatus("error"); setError(errorText(reason)); } };
+  const refreshServerCatalog = async () => {
+    try {
+      const providers = await fetchServerProviders();
+      await persistComposerSettings(applyServerProviders(settings, providers));
+      setComposerCatalogs({});
+      setError("");
+    } catch (reason) {
+      setError(errorText(reason));
+    }
+  };
   const chooseWorkspaceAccessMode = (mode: WorkspaceAccessMode) => {
     setWorkspaceFocusOpen(false);
     if (mode === workspaceAccessMode) return;
@@ -742,13 +759,15 @@ export function App() {
   const activeSelection = activeComposerModel(settings, composerCatalogs);
   const availableComposerModels = composerModels(settings, composerCatalogs);
   const loadComposerCatalog = async (provider: ProviderProfile) => {
-    if (!provider.apiKey.trim() || !provider.baseUrl.trim()) return;
     if (composerCatalogLoadingRef.current.has(provider.id)) return;
     composerCatalogLoadingRef.current.add(provider.id);
     setComposerCatalogs((current) => ({ ...current, [provider.id]: { status: "loading", models: current[provider.id]?.models ?? [] } }));
     try {
-      const records = await fetchModelCatalog(provider.baseUrl, provider.apiKey);
-      setComposerCatalogs((current) => ({ ...current, [provider.id]: { status: "ready", models: records ?? [] } }));
+      const providers = await fetchServerProviders();
+      const refreshed = providers.find((item) => item.id === provider.id);
+      const records: ApiModelRecord[] = (refreshed?.models ?? []).map((model) => ({ id: model.id, ...(model.name ? { name: model.name } : {}), ...(model.reasoningLevels ? { reasoning: { levels: model.reasoningLevels, defaultLevel: model.defaultReasoningLevel, mandatory: !model.reasoningLevels.includes("off") } } : {}) }));
+      setSettings((current) => applyServerProviders(current, providers));
+      setComposerCatalogs((current) => ({ ...current, [provider.id]: { status: "ready", models: records } }));
     } catch (reason) {
       setComposerCatalogs((current) => ({ ...current, [provider.id]: { status: "error", models: current[provider.id]?.models ?? [], error: errorText(reason) } }));
     } finally {
@@ -804,7 +823,7 @@ export function App() {
       </div>
       <div className="sidebar-section-heading"><span>Sessions</span><button className="file-tool-button" aria-label="New session" title="New session" onClick={() => void startSession()}><UiIcon name="plus" /></button></div>
       <SessionList sessions={sessions} activeSessionId={activeSession?.id} editingSessionId={editingSessionId} sessionNameDraft={sessionNameDraft} onSelect={(session) => void loadExistingSession(session)} onRenameStart={beginSessionRename} onRenameChange={setSessionNameDraft} onRenameCommit={commitSessionRename} onRenameCancel={cancelSessionRename} onDelete={removeSession} />
-      <div className="sidebar-bottom"><div className="sidebar-actions"><button className="settings-link" onClick={() => setSettingsOpen(true)}><UiIcon name="settings" /><span>Settings</span></button><button className="theme-toggle sidebar-theme-toggle" aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`} title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`} onClick={() => setTheme((value) => value === "dark" ? "light" : "dark")}><UiIcon name={theme === "dark" ? "sun" : "moon"} /></button></div><span className="version">v0.1.0 · browser-only</span></div>
+      <div className="sidebar-bottom"><div className="sidebar-actions"><button className="settings-link" onClick={() => setSettingsOpen(true)}><UiIcon name="settings" /><span>Settings</span></button><button className="theme-toggle sidebar-theme-toggle" aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`} title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`} onClick={() => setTheme((value) => value === "dark" ? "light" : "dark")}><UiIcon name={theme === "dark" ? "sun" : "moon"} /></button></div><span className="version">v0.1.0 · Vercel API</span></div>
     </aside>
     <div className="sidebar-resizer" role="separator" aria-label="Resize sidebar" aria-orientation="vertical" aria-valuemin={MIN_SIDEBAR_WIDTH} aria-valuemax={MAX_SIDEBAR_WIDTH} aria-valuenow={Math.round(sidebarWidth)} tabIndex={0} title="Drag to resize · Double-click to reset" onPointerDown={(event) => { if (event.button !== 0) return; const currentWidth = sidebarRef.current?.getBoundingClientRect().width ?? sidebarWidth; sidebarResizeRef.current = { active: true, startX: event.clientX, startWidth: currentWidth, width: currentWidth }; event.currentTarget.setPointerCapture(event.pointerId); setResizingSidebar(true); }} onPointerMove={(event) => { if (!sidebarResizeRef.current.active) return; applySidebarWidth(sidebarResizeRef.current.startWidth + event.clientX - sidebarResizeRef.current.startX); }} onPointerUp={(event) => finishSidebarResize(event.currentTarget, event.pointerId)} onPointerCancel={(event) => finishSidebarResize(event.currentTarget, event.pointerId)} onDoubleClick={() => { const next = applySidebarWidth(DEFAULT_SIDEBAR_WIDTH); setSidebarWidth(next); localStorage.setItem(SIDEBAR_WIDTH_KEY, String(next)); }} onKeyDown={resizeSidebarFromKeyboard} />
     <section className="app-workspace">
@@ -830,7 +849,7 @@ export function App() {
         <WorkspaceInspector info={workspaceInfo} accessMode={workspaceAccessMode} entries={workspaceEntries} messages={messages} tab={inspectorTab} onTabChange={setInspectorTab} query={fileQuery} onQueryChange={setFileQuery} expandedPaths={expandedPaths} selectedPath={selectedFilePath} onToggle={toggleTreePath} onSelect={selectFile} />
       </div>
     </section>
-    {settingsOpen && <SettingsDialog settings={settings} apiStatus={apiStatus} onTest={(draft) => void testApi(draft)} onChange={updateSettings} onClose={() => setSettingsOpen(false)} />}
+    {settingsOpen && <SettingsDialog settings={settings} apiStatus={apiStatus} onTest={() => void testApi()} onChange={updateSettings} onProvidersChanged={() => void refreshServerCatalog()} onClose={() => setSettingsOpen(false)} />}
   </div>;
 }
 
@@ -847,12 +866,12 @@ function ComposerSelectionPicker({ models, activeModelKey, activeModel, selected
   const modelLabel = activeModel.model.name && activeModel.model.name !== activeModel.model.id ? activeModel.model.name : activeModel.model.id;
   const reasoningIndex = Math.max(0, reasoningLevels.indexOf(selectedReasoning));
   const reasoningNote = catalogState?.status === "loading"
-    ? "Loading model capabilities from the provider…"
+    ? "Refreshing configured model capabilities…"
     : catalogState?.status === "error"
       ? `Could not load model capabilities${catalogState.error ? `: ${catalogState.error}` : "."}`
       : activeModel.model.reasoningLevels?.length
-        ? "Levels detected from this model's API metadata."
-        : `No metadata found for ${modelLabel} — all levels are available.`;
+        ? "Levels configured by the administrator."
+        : `No capability metadata is configured for ${modelLabel} — all levels are available.`;
   return <div className="composer-picker-menu model-picker-menu" role="menu">
     <div className="picker-menu-heading"><strong>Choose model</strong><span>{models.length} available</span></div>
     <div className="picker-results">{Array.from(groups.entries()).map(([providerId, items]) => <section className="picker-group" key={providerId}><div className="picker-group-heading"><span>{items[0].provider.name}</span><small>{items.length}</small></div>{items.map(({ provider, model }) => { const key = `${provider.id}:${model.id}`; return <button className={`picker-model-option ${key === activeModelKey ? "selected" : ""}`} key={key} onClick={() => onSelectModel(provider.id, model.id)}><span><strong>{model.name && model.name !== model.id ? model.name : model.id}</strong><small>{model.id}{model.reasoningLevels?.length ? ` · ${model.reasoningLevels.length} reasoning levels` : " · all reasoning levels"}</small></span><b>{key === activeModelKey ? "✓" : ""}</b></button>; })}</section>)}</div>
@@ -864,110 +883,22 @@ function ComposerSelectionPicker({ models, activeModelKey, activeModel, selected
   </div>;
 }
 
-function SettingsDialog({ settings, apiStatus, onTest, onChange, onClose }: { settings: ApiSettings; apiStatus: string; onTest: (settings: ApiSettings) => void; onChange: (settings: ApiSettings) => Promise<void>; onClose: () => void }) {
-  const [draft, setDraft] = useState(settings);
+function SettingsDialog({ settings, apiStatus, onTest, onChange, onProvidersChanged, onClose }: { settings: ApiSettings; apiStatus: string; onTest: () => void; onChange: (settings: ApiSettings) => Promise<void>; onProvidersChanged: () => void; onClose: () => void }) {
+  const [draft, setDraft] = useState(() => ({ maxOutputTokens: settings.maxOutputTokens, userPrompt: settings.userPrompt, sendShortcut: settings.sendShortcut }));
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [activeProviderId, setActiveProviderId] = useState(settings.activeProviderId || settings.providers[0]?.id);
-  const [modelQuery, setModelQuery] = useState("");
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [catalog, setCatalog] = useState<Record<string, ApiModelRecord[]>>({});
-  const [catalogStatus, setCatalogStatus] = useState<Record<string, "idle" | "loading" | "ready" | "empty" | "error">>({});
-  const [catalogError, setCatalogError] = useState<Record<string, string>>({});
-  const [validationError, setValidationError] = useState("");
   useEffect(() => {
-    if (!dirty) {
-      setDraft(settings);
-      setActiveProviderId(settings.activeProviderId || settings.providers[0]?.id);
-    }
+    if (!dirty) setDraft({ maxOutputTokens: settings.maxOutputTokens, userPrompt: settings.userPrompt, sendShortcut: settings.sendShortcut });
   }, [dirty, settings]);
 
-  const activeProvider = draft.providers.find((provider) => provider.id === activeProviderId) ?? draft.providers[0];
-  const updateDraft = <K extends keyof ApiSettings>(key: K, value: ApiSettings[K]) => {
+  const updateDraft = <K extends keyof typeof draft>(key: K, value: typeof draft[K]) => {
     setDirty(true);
     setDraft((current) => ({ ...current, [key]: value }));
   };
-  const updateActiveProvider = (changes: Partial<ProviderProfile>) => {
-    if (!activeProvider) return;
-    setDirty(true);
-    setDraft((current) => {
-      const providers = current.providers.map((provider) => provider.id === activeProvider.id ? { ...provider, ...changes } : provider);
-      const nextActive = providers.find((provider) => provider.id === activeProvider.id) ?? providers[0];
-      return nextActive ? { ...current, providers, baseUrl: nextActive.baseUrl, apiKey: nextActive.apiKey, rememberKey: nextActive.rememberKey } : { ...current, providers };
-    });
-  };
-  const activateProvider = (providerId: string) => {
-    const provider = draft.providers.find((item) => item.id === providerId);
-    if (!provider) return;
-    const model = provider.models.find((item) => item.id === draft.modelId) ?? provider.models[0];
-    const levels = model?.reasoningLevels?.length ? model.reasoningLevels : REASONING_LEVELS;
-    setActiveProviderId(provider.id);
-    setModelQuery("");
-    setValidationError("");
-    updateDraft("activeProviderId", provider.id);
-    setDraft((current) => ({ ...current, baseUrl: provider.baseUrl, apiKey: provider.apiKey, rememberKey: provider.rememberKey, modelId: model?.id ?? current.modelId, reasoningLevel: reconcileReasoningLevel(current.reasoningLevel, levels, model?.defaultReasoningLevel) }));
-  };
-  const addProvider = () => {
-    const provider: ProviderProfile = { id: newProviderId(), name: `Provider ${draft.providers.length + 1}`, baseUrl: "https://api.example.com/v1", apiKey: "", rememberKey: false, models: [] };
-    setDirty(true);
-    setDraft((current) => ({ ...current, providers: [...current.providers, provider], activeProviderId: provider.id, baseUrl: provider.baseUrl, apiKey: "", modelId: "", rememberKey: false }));
-    setActiveProviderId(provider.id);
-    setModelQuery("");
-  };
-  const removeProvider = () => {
-    if (!activeProvider || draft.providers.length <= 1) return;
-    const providers = draft.providers.filter((provider) => provider.id !== activeProvider.id);
-    const nextActive = providers[0];
-    const nextModel = nextActive.models[0];
-    setDirty(true);
-    setDraft((current) => ({ ...current, providers, activeProviderId: nextActive.id, baseUrl: nextActive.baseUrl, apiKey: nextActive.apiKey, modelId: nextModel?.id ?? "", rememberKey: nextActive.rememberKey, reasoningLevel: reconcileReasoningLevel(current.reasoningLevel, nextModel?.reasoningLevels?.length ? nextModel.reasoningLevels : REASONING_LEVELS, nextModel?.defaultReasoningLevel) }));
-    setActiveProviderId(nextActive.id);
-    setModelQuery("");
-  };
-  const addModel = (model: ProviderModel) => {
-    if (!activeProvider || activeProvider.models.some((item) => item.id === model.id)) return;
-    updateActiveProvider({ models: [...activeProvider.models, model] });
-    setModelQuery("");
-  };
-  const addManualModel = () => {
-    const id = modelQuery.trim();
-    if (!id) return;
-    addModel({ id });
-  };
-  const removeModel = (modelId: string) => {
-    if (!activeProvider) return;
-    const models = activeProvider.models.filter((model) => model.id !== modelId);
-    setDirty(true);
-    setDraft((current) => ({ ...current, providers: current.providers.map((provider) => provider.id === activeProvider.id ? { ...provider, models } : provider), modelId: current.modelId === modelId ? models[0]?.id ?? "" : current.modelId }));
-  };
-  const loadModels = async () => {
-    if (!activeProvider?.apiKey.trim() || !activeProvider.baseUrl.trim()) {
-      setCatalogError((current) => ({ ...current, [activeProvider?.id ?? "none"]: "Add a base URL and API key first." }));
-      return;
-    }
-    const providerId = activeProvider.id;
-    setCatalogStatus((current) => ({ ...current, [providerId]: "loading" }));
-    setCatalogError((current) => ({ ...current, [providerId]: "" }));
-    try {
-      const records = await fetchModelCatalog(activeProvider.baseUrl, activeProvider.apiKey);
-      setCatalog((current) => ({ ...current, [providerId]: records ?? [] }));
-      setCatalogStatus((current) => ({ ...current, [providerId]: records?.length ? "ready" : "empty" }));
-    } catch (reason) {
-      setCatalogStatus((current) => ({ ...current, [providerId]: "error" }));
-      setCatalogError((current) => ({ ...current, [providerId]: errorText(reason) }));
-    }
-  };
   const save = async () => {
-    if (!activeProvider || activeProvider.models.length === 0) {
-      setValidationError("Add at least one model to the active provider.");
-      return;
-    }
-    const activeModel = activeProvider.models.find((model) => model.id === draft.modelId) ?? activeProvider.models[0];
-    const levels = activeModel.reasoningLevels?.length ? activeModel.reasoningLevels : REASONING_LEVELS;
-    const next: ApiSettings = { ...draft, activeProviderId: activeProvider.id, baseUrl: activeProvider.baseUrl, apiKey: activeProvider.apiKey, modelId: activeModel.id, rememberKey: activeProvider.rememberKey, reasoningLevel: reconcileReasoningLevel(draft.reasoningLevel, levels, activeModel.defaultReasoningLevel) };
     setSaving(true);
     try {
-      await onChange(next);
+      await onChange({ ...settings, ...draft, baseUrl: "/api", apiKey: "", rememberKey: false });
       onClose();
     } catch {
       // The parent displays the persistence error and leaves the dialog open.
@@ -975,28 +906,14 @@ function SettingsDialog({ settings, apiStatus, onTest, onChange, onClose }: { se
       setSaving(false);
     }
   };
-  const query = modelQuery.trim().toLowerCase();
-  const modelSuggestions = (catalog[activeProvider?.id ?? ""] ?? []).filter((model) => `${model.id} ${model.name ?? ""}`.toLowerCase().includes(query)).slice(0, 12);
-  const activeCatalogStatus = activeProvider ? catalogStatus[activeProvider.id] ?? "idle" : "idle";
-  const catalogStatusText = activeCatalogStatus === "loading" ? "Loading models from this API…" : activeCatalogStatus === "ready" ? `${catalog[activeProvider?.id ?? ""]?.length ?? 0} models loaded. Search locally and add the ones you need.` : activeCatalogStatus === "empty" ? "The API returned no models. Add a model ID manually." : activeCatalogStatus === "error" ? catalogError[activeProvider?.id ?? ""] || "Could not load the model catalog." : "Catalogs are requested only when you press Load models.";
-  return <Dialog title="Provider settings" onClose={onClose}>
-    <div className="provider-layout">
-      <aside className="provider-list"><div className="dialog-section-label">PROVIDERS</div>{draft.providers.map((provider) => <button className={`provider-tab ${provider.id === activeProvider?.id ? "selected" : ""}`} key={provider.id} onClick={() => activateProvider(provider.id)}>{providerMark(provider.name)}<span><strong>{provider.name}</strong><small>{provider.models.length} model{provider.models.length === 1 ? "" : "s"}</small></span></button>)}<button className="add-provider" onClick={addProvider}><span>＋</span> Add provider</button></aside>
-      {activeProvider && <section className="provider-editor"><div className="provider-editor-heading"><div className="provider-title-line">{providerMark(activeProvider.name)}<span><strong>{activeProvider.name}</strong><small>Configure your {activeProvider.name} connection</small></span></div><button className="remove-provider" onClick={removeProvider} disabled={draft.providers.length <= 1}>Remove</button></div>
-        <label className="setting-field"><span className="field-title">Provider name</span><input value={activeProvider.name} onChange={(event) => updateActiveProvider({ name: event.target.value })} placeholder="OpenRouter" /></label>
-        <label className="setting-field"><span className="field-title">Base URL</span><small className="field-helper">Your OpenAI-compatible endpoint</small><input value={activeProvider.baseUrl} onChange={(event) => updateActiveProvider({ baseUrl: event.target.value })} placeholder="https://api.openai.com/v1" /></label>
-        <label className="setting-field"><span className="field-title">API key</span><div className="secret-field"><input type={showApiKey ? "text" : "password"} value={activeProvider.apiKey} onChange={(event) => updateActiveProvider({ apiKey: event.target.value })} placeholder="Used only by this browser" /><button type="button" aria-label={showApiKey ? "Hide API key" : "Show API key"} onClick={() => setShowApiKey((value) => !value)}><UiIcon name="eye" /></button></div></label>
-        <div className="provider-api-actions"><button className="ghost-button" onClick={() => void loadModels()} disabled={!activeProvider.apiKey || activeCatalogStatus === "loading"}><UiIcon name="refresh" />{activeCatalogStatus === "loading" ? "Loading…" : "Load models"}</button><button className="ghost-button" onClick={() => onTest({ ...draft, baseUrl: activeProvider.baseUrl, apiKey: activeProvider.apiKey })} disabled={!activeProvider.apiKey || apiStatus === "checking" || saving}><UiIcon name="check" />{apiStatus === "checking" ? "Checking…" : "Check API"}</button><span className={`api-connected ${apiStatus === "ready" ? "ready" : ""}`}>{apiStatus === "ready" ? "✓ Connected" : "Not connected"}</span></div>
-        <fieldset className="model-setting"><legend><span>Models</span><small>Select which models to make available</small><strong>{activeProvider.models.length} selected</strong></legend><div className="selected-models">{activeProvider.models.map((model) => <span className="selected-model" key={model.id}><span title={model.id}>{model.name && model.name !== model.id ? model.name : model.id}</span><button type="button" aria-label={`Remove ${model.id}`} onClick={() => removeModel(model.id)}>×</button></span>)}{activeProvider.models.length === 0 && <span className="no-selected-models">No models selected yet.</span>}<button className="selected-model-caret" type="button" aria-label="Browse selected models"><Chevron open={false} /></button></div><label className="setting-field model-search-label"><span className="field-title">Model ID or search catalog</span><div className="model-input"><input value={modelQuery} onChange={(event) => setModelQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addManualModel(); } }} placeholder="Start typing a model ID…" /><UiIcon name="search" /></div><small className="field-helper">Catalogs are requested only when you press Load models.</small></label>{modelSuggestions.length > 0 && <div className="model-suggestions" role="listbox">{modelSuggestions.map((record) => { const alreadyAdded = activeProvider.models.some((model) => model.id === record.id); const model: ProviderModel = { id: record.id, ...(record.name ? { name: record.name } : {}), ...(record.reasoning ? { reasoningLevels: record.reasoning.levels, defaultReasoningLevel: record.reasoning.defaultLevel } : {}) }; return <button type="button" className="model-suggestion" key={record.id} onClick={() => addModel(model)} disabled={alreadyAdded}><span><strong>{record.name && record.name !== record.id ? record.name : record.id}</strong><small>{record.id}{record.reasoning?.levels.length ? ` · ${record.reasoning.levels.map((level) => REASONING_LEVEL_LABELS[level]).join(", ")}` : " · reasoning levels unknown"}</small></span><b>{alreadyAdded ? "Added" : "Add"}</b></button>; })}</div>}{activeCatalogStatus !== "idle" && <small className="model-catalog-status" role="status">{catalogStatusText}{catalogError[activeProvider.id] ? ` ${catalogError[activeProvider.id]}` : ""}</small>}</fieldset>
-        <label className="switch-row"><button type="button" role="switch" aria-checked={activeProvider.rememberKey} className={`switch ${activeProvider.rememberKey ? "on" : ""}`} onClick={() => updateActiveProvider({ rememberKey: !activeProvider.rememberKey })}><span /></button><span><strong>Remember this provider key in IndexedDB</strong><small>You won’t need to enter the key again on this device.</small></span></label>
-      </section>}
-    </div>
+  return <Dialog title="Application settings" onClose={onClose}>
+    <section className="provider-editor"><div className="provider-editor-heading"><div><strong>Server API</strong><small>Provider URLs and keys are server-side only.</small></div><div className="provider-api-actions"><button className="ghost-button" onClick={onTest} disabled={apiStatus === "checking" || saving}><UiIcon name="check" />{apiStatus === "checking" ? "Checking…" : "Check server API"}</button><span className={`api-connected ${apiStatus === "ready" ? "ready" : ""}`}>{apiStatus === "ready" ? "✓ Connected" : "Not connected"}</span></div></div></section>
+    <ProviderAdmin onChanged={onProvidersChanged} />
     <label className="setting-field"><span className="field-title">Max output tokens</span><small className="field-helper">Maximum number of tokens for model responses</small><input type="number" min="256" max="32768" value={draft.maxOutputTokens} onChange={(event) => updateDraft("maxOutputTokens", Number(event.target.value) || 4096)} /></label>
     <label className="setting-field"><span className="field-title">Custom prompt</span><small className="field-helper">Added to the built-in instructions for every new agent session. It does not replace browser and workspace constraints.</small><textarea value={draft.userPrompt} maxLength={8000} rows={6} onChange={(event) => updateDraft("userPrompt", event.target.value)} placeholder="For example: Prefer concise answers and explain risky changes before applying them." /></label>
     <fieldset className="shortcut-setting"><legend>Send messages</legend><div className="shortcut-options"><label><input type="radio" name="send-shortcut" checked={draft.sendShortcut === "enter"} onChange={() => updateDraft("sendShortcut", "enter")} /><span><strong>Enter</strong><small>Shift+Enter adds a new line</small></span></label><label><input type="radio" name="send-shortcut" checked={draft.sendShortcut === "mod-enter"} onChange={() => updateDraft("sendShortcut", "mod-enter")} /><span><strong>⌘/Ctrl + Enter</strong><small>Enter adds a new line</small></span></label></div></fieldset>
-    {validationError && <div className="settings-validation" role="alert">{validationError}</div>}
-    <p className="dialog-note"><UiIcon name="info" /> <span>Models are selected per provider here and become widgets in the composer. Reasoning levels are chosen per request; if the API does not publish metadata, all levels remain available. Keys are sent only to their provider.</span></p>
-    <div className="dialog-actions"><button className="send-button" onClick={() => void save()} disabled={saving || !activeProvider}>{saving ? "Saving…" : "Save settings"}</button></div>
+    <p className="dialog-note"><UiIcon name="info" /> <span>Provider changes are applied on the server. Model and reasoning choices appear in the composer after saving or importing them.</span></p>
+    <div className="dialog-actions"><button className="send-button" onClick={() => void save()} disabled={saving}>{saving ? "Saving…" : "Save settings"}</button></div>
   </Dialog>;
 }
 

@@ -20,9 +20,7 @@ describe("settings persistence", () => {
     await expect(loadSettings()).resolves.toEqual({
       ...defaultSettings,
       reasoningLevel: "medium",
-      apiKey: "secret",
-      rememberKey: true,
-      providers: [{ ...defaultSettings.providers[0], apiKey: "secret", rememberKey: true }],
+      providers: [defaultSettings.providers[0]],
     });
 
     storage.stored = undefined;

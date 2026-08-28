@@ -100,7 +100,7 @@ export interface ToolActivity {
 }
 
 export const defaultSettings: ApiSettings = {
-  baseUrl: "https://api.openai.com/v1",
+  baseUrl: "/api",
   apiKey: "",
   modelId: "gpt-4.1-mini",
   userPrompt: "",
@@ -108,11 +108,11 @@ export const defaultSettings: ApiSettings = {
   reasoningLevel: "off",
   rememberKey: false,
   sendShortcut: "mod-enter",
-  activeProviderId: "provider-openai-compatible",
+  activeProviderId: "server-api",
   providers: [{
-    id: "provider-openai-compatible",
-    name: "OpenAI-compatible",
-    baseUrl: "https://api.openai.com/v1",
+    id: "server-api",
+    name: "Server API",
+    baseUrl: "/api",
     apiKey: "",
     rememberKey: false,
     models: [{ id: "gpt-4.1-mini" }],

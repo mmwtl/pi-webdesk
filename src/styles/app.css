@@ -430,6 +430,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus
 .add-provider span { margin-right: 4px; font-size: 13px; }
 .provider-editor { min-width: 0; display: grid; gap: 12px; }
 .provider-editor-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.provider-editor-heading > div:first-child { min-width: 0; display: grid; gap: 3px; }
 .provider-title-line { min-width: 0; display: flex; align-items: center; gap: 8px; }
 .provider-title-line > span:last-child { min-width: 0; display: grid; gap: 3px; }
 .provider-editor-heading strong { color: var(--text); font-size: 14px; font-weight: 700; }

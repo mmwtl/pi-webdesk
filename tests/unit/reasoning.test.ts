@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { fetchModelCatalog, fetchReasoningCapabilities } from "../../src/agent/browserFetch.ts";
+import { checkApi, fetchModelCatalog, fetchReasoningCapabilities } from "../../src/agent/serverApi.ts";
 import { createModel, createStreamFunction } from "../../src/agent/createModel.ts";
 import { defaultSettings } from "../../src/app/state.ts";
 
@@ -15,7 +15,7 @@ describe("reasoning levels", () => {
       ],
     }), { status: 200, headers: { "content-type": "application/json" } })));
 
-    await expect(fetchModelCatalog("https://provider.example/v1", "key")).resolves.toEqual([
+    await expect(fetchModelCatalog()).resolves.toEqual([
       { id: "stealth/ox-alpha", name: "Ox Alpha", reasoning: { levels: ["low", "high", "max"], defaultLevel: "high", mandatory: true } },
       { id: "gpt-4.1-mini" },
     ]);
@@ -29,7 +29,7 @@ describe("reasoning levels", () => {
       }],
     }), { status: 200, headers: { "content-type": "application/json" } })));
 
-    await expect(fetchReasoningCapabilities("https://openrouter.ai/api/v1", "key", "stealth/ox-alpha")).resolves.toEqual({
+    await expect(fetchReasoningCapabilities("stealth/ox-alpha")).resolves.toEqual({
       levels: ["low", "high", "max"],
       defaultLevel: "max",
       mandatory: true,
@@ -39,7 +39,15 @@ describe("reasoning levels", () => {
   test("falls back when the selected model has no reasoning metadata", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ data: [{ id: "gpt-4.1-mini" }] }), { status: 200 })));
 
-    await expect(fetchReasoningCapabilities("https://api.example.com/v1", "key", "gpt-4.1-mini")).resolves.toBeUndefined();
+    await expect(fetchReasoningCapabilities("gpt-4.1-mini")).resolves.toBeUndefined();
+  });
+
+  test("does not mistake the Vite SPA fallback for a healthy application API", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("<!doctype html>", { status: 200, headers: { "content-type": "text/html" } })));
+    await expect(checkApi()).rejects.toThrow("invalid health response");
+
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "content-type": "application/json" } })));
+    await expect(checkApi()).resolves.toBe("Server API reachable");
   });
 
   test("creates a model with an explicit Pi level map", () => {
@@ -60,14 +68,14 @@ describe("reasoning levels", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(responseBody, { status: 200, headers: { "content-type": "text/event-stream" } })));
 
     let payload: Record<string, unknown> | undefined;
-    const settings = { ...defaultSettings, baseUrl: "https://openrouter.ai/api/v1", apiKey: "key", modelId: "stealth/ox-alpha", reasoningLevel: "high" as const };
+    const settings = { ...defaultSettings, apiKey: "key", modelId: "stealth/ox-alpha", reasoningLevel: "high" as const };
     const stream = createStreamFunction(settings)(createModel(settings), { messages: [{ role: "user", content: "hello", timestamp: 0 }] }, {
       reasoning: "high",
       onPayload: (value) => { payload = value as Record<string, unknown>; },
     });
     await stream.result();
 
-    expect(payload?.reasoning).toEqual({ effort: "high" });
+    expect(payload?.reasoning_effort).toBe("high");
 
     let offPayload: Record<string, unknown> | undefined;
     const offSettings = { ...settings, reasoningLevel: "off" as const };
@@ -77,6 +85,6 @@ describe("reasoning levels", () => {
     });
     await offStream.result();
 
-    expect(offPayload?.reasoning).toBeUndefined();
+    expect(offPayload?.reasoning_effort).toBeUndefined();
   });
 });
