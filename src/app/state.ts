@@ -47,6 +47,7 @@ export interface ProviderProfile {
 }
 
 export type WorkspaceAccessMode = "read" | "confirm" | "write";
+export const CHAT_WORKSPACE_ID = "chat";
 
 export const WORKSPACE_ACCESS_MODE_LABELS: Record<WorkspaceAccessMode, string> = {
   read: "Read only",

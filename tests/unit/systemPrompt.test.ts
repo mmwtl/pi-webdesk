@@ -19,4 +19,12 @@ describe("system prompt", () => {
   test("does not add an empty custom prompt section", () => {
     expect(createSystemPrompt(workspace, "read", "  ")).not.toContain("User-provided instructions configured in Settings:");
   });
+
+  test("generates chat-only prompt when workspace is omitted", () => {
+    const prompt = createSystemPrompt(undefined, "write", "Answer briefly.");
+
+    expect(prompt).toContain("Mode: Chat only (no workspace folder selected).");
+    expect(prompt).toContain("You do not currently have access to local files or filesystem tools.");
+    expect(prompt).toContain("User-provided instructions configured in Settings:\nAnswer briefly.");
+  });
 });

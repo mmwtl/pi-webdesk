@@ -8,9 +8,9 @@ import type { WriteConfirmation } from "../tools/common.ts";
 
 export class PiWebdeskAgent {
   readonly agent: Agent;
-  constructor(workspace: BrowserWorkspace, workspaceInfo: WorkspaceInfo, settings: ApiSettings, messages: AgentMessage[] = [], accessMode: WorkspaceAccessMode = "write", confirmWrite?: WriteConfirmation) {
+  constructor(workspace: BrowserWorkspace | undefined, workspaceInfo: WorkspaceInfo | undefined, settings: ApiSettings, messages: AgentMessage[] = [], accessMode: WorkspaceAccessMode = "write", confirmWrite?: WriteConfirmation) {
     this.agent = new Agent({
-      initialState: { systemPrompt: createSystemPrompt(workspaceInfo, accessMode, settings.userPrompt), model: createModel(settings), thinkingLevel: settings.reasoningLevel, tools: createBrowserTools(workspace, accessMode, confirmWrite), messages },
+      initialState: { systemPrompt: createSystemPrompt(workspaceInfo, accessMode, settings.userPrompt), model: createModel(settings), thinkingLevel: settings.reasoningLevel, tools: workspace ? createBrowserTools(workspace, accessMode, confirmWrite) : [], messages },
       streamFn: createStreamFunction(settings),
       toolExecution: "parallel",
       steeringMode: "one-at-a-time",
