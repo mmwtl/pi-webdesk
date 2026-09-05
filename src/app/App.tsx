@@ -8,7 +8,7 @@ import { sha256 } from "../persistence/hash.ts";
 import { loadSettings, saveSettings } from "../persistence/settings.ts";
 import { createSession, deleteSession, listSessions, loadSession, renameSession, saveSession } from "../persistence/sessions.ts";
 import { restoreWorkspaces, saveWorkspace } from "../persistence/workspaces.ts";
-import { defaultSettings, REASONING_LEVEL_LABELS, REASONING_LEVELS, WORKSPACE_ACCESS_MODE_DESCRIPTIONS, WORKSPACE_ACCESS_MODE_LABELS, type ApiSettings, type ProviderModel, type ProviderProfile, type ReasoningLevel, type SessionSummary, type ToolActivity, type WorkspaceAccessMode, type WorkspaceInfo, type WorkspaceRecord, type WorkspaceWriteRequest } from "./state.ts";
+import { defaultSettings, REASONING_LEVEL_LABELS, REASONING_LEVELS, WORKSPACE_ACCESS_MODE_DESCRIPTIONS, WORKSPACE_ACCESS_MODE_LABELS, CHAT_WORKSPACE_ID, type ApiSettings, type ProviderModel, type ProviderProfile, type ReasoningLevel, type SessionSummary, type ToolActivity, type WorkspaceAccessMode, type WorkspaceInfo, type WorkspaceRecord, type WorkspaceWriteRequest } from "./state.ts";
 import { deriveSessionName } from "./sessionName.ts";
 import { groupTranscriptMessages } from "./transcript.ts";
 import { summarizeError } from "./errors.ts";
@@ -232,7 +232,7 @@ function readMigratedStorage(key: string, legacyKey: string): string | null {
   return legacy;
 }
 
-function UiIcon({ name }: { name: "folder" | "plus" | "edit" | "close" | "settings" | "send" | "stop" | "sun" | "moon" | "search" | "filter" | "file" | "globe" | "eye" | "refresh" | "check" | "info" | "code" | "message" | "arrow-right" | "spark" | "copy" }) {
+function UiIcon({ name }: { name: "folder" | "plus" | "edit" | "close" | "settings" | "send" | "stop" | "sun" | "moon" | "search" | "filter" | "file" | "globe" | "eye" | "refresh" | "check" | "info" | "code" | "message" | "arrow-right" | "spark" | "copy" | "menu" }) {
   let paths: React.ReactNode;
   if (name === "folder") paths = <><path d="M2.5 5.5h4l1.5 1.7h5.5v5.3h-11z" /><path d="M2.5 5.5V4h4l1.4 1.5" /></>;
   else if (name === "plus") paths = <path d="M8 3v10M3 8h10" />;
@@ -250,6 +250,8 @@ function UiIcon({ name }: { name: "folder" | "plus" | "edit" | "close" | "settin
   else if (name === "code") paths = <><path d="m6 4-3 4 3 4M10 4l3 4-3 4" /></>;
   else if (name === "message") paths = <path d="M3 3.2h10v7.1H7.7L4.3 13v-2.7H3z" />;
   else if (name === "copy") paths = <><rect x="5.5" y="5.5" width="7.5" height="7.5" rx="1.5" /><path d="M3.5 10.5h-1a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v1" /></>;
+  else if (name === "spark") paths = <path d="m8 1.5 1.5 4.5L14 7.5l-4.5 1.5L8 13.5l-1.5-4.5L2 7.5l4.5-1.5z" />;
+  else if (name === "menu") paths = <path d="M2.5 4h11M2.5 8h11M2.5 12h11" />;
   else paths = null;
   return <svg className={`ui-icon ${name}`} viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.45" strokeLinecap="round" strokeLinejoin="round">{paths}</svg>;
 }
@@ -471,6 +473,7 @@ export function App() {
   const [workspaceAccessMode, setWorkspaceAccessMode] = useState<WorkspaceAccessMode>(initialWorkspaceAccessMode);
   const [workspaceFocusOpen, setWorkspaceFocusOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [workspaceEntries, setWorkspaceEntries] = useState<BrowserEntry[]>([]);
   const [expandedPaths, setExpandedPaths] = useState<string[]>([]);
   const [fileQuery, setFileQuery] = useState("");
@@ -562,7 +565,15 @@ export function App() {
       }
       setSavedWorkspaces(restored);
       const granted = restored.find((item) => item.permission === "granted");
-      if (granted) void activateWorkspace(new BrowserWorkspace(granted.handle, granted.id));
+      if (granted) {
+        void activateWorkspace(new BrowserWorkspace(granted.handle, granted.id));
+      } else {
+        void listSessions(CHAT_WORKSPACE_ID).then((chatSessions) => {
+          if (cancelled) return;
+          setSessions(chatSessions);
+          if (chatSessions[0]) void loadExistingSession(chatSessions[0]);
+        }).catch(() => {});
+      }
     }).catch((reason) => setError(errorText(reason)));
     return () => { cancelled = true; };
   }, []);
@@ -626,8 +637,32 @@ export function App() {
     workspaceRef.current = next;
     setWorkspace(next); setWorkspaceInfo(info); setSavedWorkspaces(await restoreWorkspaces()); setSessions(await listSessions(info.id));
     setWorkspaceEntries([]); setExpandedPaths([]); setSelectedFilePath("");
-    agentSessionRef.current = undefined; setActiveSession(undefined); setMessages([]); setToolActivity({}); setWorkspaceOpen(false); setError("");
+    agentSessionRef.current = undefined; setActiveSession(undefined); setMessages([]); setToolActivity({}); setWorkspaceOpen(false); setMobileMenuOpen(false); setError("");
     void refreshWorkspaceTree(next, "initial");
+  };
+
+  const switchToChat = async () => {
+    discardAgent();
+    workspaceRef.current = undefined;
+    setWorkspace(undefined);
+    setWorkspaceInfo(undefined);
+    setWorkspaceEntries([]);
+    setExpandedPaths([]);
+    setSelectedFilePath("");
+    const chatSessions = await listSessions(CHAT_WORKSPACE_ID);
+    setSessions(chatSessions);
+    const latest = chatSessions[0];
+    if (latest) {
+      await loadExistingSession(latest);
+    } else {
+      agentSessionRef.current = undefined;
+      setActiveSession(undefined);
+      setMessages([]);
+      setToolActivity({});
+    }
+    setWorkspaceOpen(false);
+    setMobileMenuOpen(false);
+    setError("");
   };
 
   const openFolder = async () => {
@@ -653,10 +688,10 @@ export function App() {
   };
 
   const ensureAgent = async (): Promise<PiWebdeskAgent> => {
-    if (!workspace || !workspaceInfo) throw new Error("Open a workspace folder first");
-    if (!workspaceInfo.canWrite && workspaceAccessMode !== "read") throw new Error("Workspace does not have write permission. Re-open the folder and grant write access.");
+    if (workspaceInfo && !workspaceInfo.canWrite && workspaceAccessMode !== "read") throw new Error("Workspace does not have write permission. Re-open the folder and grant write access.");
+    const currentWorkspaceId = workspaceInfo?.id ?? CHAT_WORKSPACE_ID;
     let session = activeSession;
-    if (!session) { session = await createSession(workspaceInfo.id, settings.baseUrl, settings.modelId, `${workspaceInfo.name} session`); setActiveSession(session); setSessions(await listSessions(workspaceInfo.id)); }
+    if (!session) { session = await createSession(currentWorkspaceId, settings.baseUrl, settings.modelId, workspaceInfo ? `${workspaceInfo.name} session` : "Chat session"); setActiveSession(session); setSessions(await listSessions(currentWorkspaceId)); }
     agentSessionRef.current = session;
     if (agent) return agent;
     const next = new PiWebdeskAgent(workspace, workspaceInfo, settings, messages, workspaceAccessMode, workspaceAccessMode === "confirm" ? confirmWorkspaceWrite : undefined);
@@ -668,14 +703,14 @@ export function App() {
       if (event.type === "tool_execution_end") {
         setToolActivity((current) => ({ ...current, [event.toolCallId]: { ...(current[event.toolCallId] ?? { name: event.toolName, output: "" }), status: event.isError ? "error" : "done" } }));
         if (!event.isError && (event.toolName === "write" || event.toolName === "edit" || event.toolName === "apply_patch" || event.toolName === "delete")) {
-          void refreshWorkspaceTree(workspace, "update");
+          if (workspace) void refreshWorkspaceTree(workspace, "update");
         }
       }
       if (event.type === "agent_end") {
         const last = event.messages.at(-1) as any;
         if (last?.stopReason === "error") setError(last.errorMessage || "The API request failed");
         if (agentSessionRef.current) void persist(next, agentSessionRef.current);
-        void refreshWorkspaceTree(workspace, "update");
+        if (workspace) void refreshWorkspaceTree(workspace, "update");
       }
     });
     setAgent(next);
@@ -710,8 +745,9 @@ export function App() {
   };
 
   const startSession = async () => {
-    if (!workspaceInfo) { setWorkspaceOpen(true); return; }
-    try { const session = await createSession(workspaceInfo.id, settings.baseUrl, settings.modelId, `${workspaceInfo.name} session`); discardAgent(); agentSessionRef.current = session; setActiveSession(session); setSessions(await listSessions(workspaceInfo.id)); setMessages([]); setToolActivity({}); } catch (reason) { setError(errorText(reason)); }
+    const currentWorkspaceId = workspaceInfo?.id ?? CHAT_WORKSPACE_ID;
+    const defaultName = workspaceInfo ? `${workspaceInfo.name} session` : "New chat";
+    try { const session = await createSession(currentWorkspaceId, settings.baseUrl, settings.modelId, defaultName); discardAgent(); agentSessionRef.current = session; setActiveSession(session); setSessions(await listSessions(currentWorkspaceId)); setMessages([]); setToolActivity({}); setMobileMenuOpen(false); } catch (reason) { setError(errorText(reason)); }
   };
 
   const loadExistingSession = async (summary: SessionSummary) => {
@@ -852,11 +888,24 @@ export function App() {
   const transcriptGroups = groupTranscriptMessages(messages as any[]);
   const activeModelLabel = activeSelection.model.name && activeSelection.model.name !== activeSelection.model.id ? activeSelection.model.name : activeSelection.model.id;
   const activeReasoningLabel = REASONING_LEVEL_LABELS[settings.reasoningLevel];
-  const quickActions = [
-    { title: "Inspect project structure", description: "Summarize workspace directory tree", prompt: "Inspect this workspace and summarize its structure", icon: "folder" as const },
-    { title: "Find TODOs and FIXMEs", description: "Search for pending tasks across code", prompt: "Find TODOs and FIXME comments across the codebase", icon: "search" as const },
-    { title: "Refactor code", description: "Review and improve module structure", prompt: "Suggest a focused refactor for this workspace", icon: "code" as const },
-    { title: "Ask questions", description: "Inquire about architecture or functions", prompt: "Explain the architecture of this codebase", icon: "message" as const },
+  type QuickActionItem = {
+    title: string;
+    description: string;
+    prompt: string;
+    icon: "folder" | "search" | "code" | "message" | "spark";
+    action?: () => void;
+  };
+
+  const quickActions: QuickActionItem[] = workspaceInfo ? [
+    { title: "Inspect project structure", description: "Summarize workspace directory tree", prompt: "Inspect this workspace and summarize its structure", icon: "folder" },
+    { title: "Find TODOs and FIXMEs", description: "Search for pending tasks across code", prompt: "Find TODOs and FIXME comments across the codebase", icon: "search" },
+    { title: "Refactor code", description: "Review and improve module structure", prompt: "Suggest a focused refactor for this workspace", icon: "code" },
+    { title: "Ask questions", description: "Inquire about architecture or functions", prompt: "Explain the architecture of this codebase", icon: "message" },
+  ] : [
+    { title: "General coding help", description: "Ask any programming question", prompt: "How do I structure a modern TypeScript application cleanly?", icon: "message" },
+    { title: "Review snippet", description: "Paste code to analyze bugs or speed", prompt: "Review this code snippet for edge cases and performance:\n\n```ts\n\n```", icon: "code" },
+    { title: "System design", description: "Brainstorm an architectural pattern", prompt: "What are the trade-offs between WebSockets and SSE for real-time updates?", icon: "spark" },
+    { title: "Open folder", description: "Connect a local folder to edit files", prompt: "", icon: "folder", action: () => void openFolder() },
   ];
   const toggleTreePath = (path: string) => setExpandedPaths((current) => current.includes(path) ? current.filter((item) => item !== path) : [...current, path]);
   const selectFile = (entry: BrowserEntry) => {
@@ -867,21 +916,25 @@ export function App() {
   const otherSessions = sessions.filter((s) => s.id !== activeSession?.id);
 
   return <div ref={appShellRef} className={`app-shell ${resizingSidebar ? "resizing-sidebar" : ""}`} style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}>
+    {mobileMenuOpen && <div className="sidebar-backdrop" onClick={() => setMobileMenuOpen(false)} aria-hidden="true" />}
     {/* UNIFIED SIDEBAR */}
-    <aside ref={sidebarRef} className="sidebar">
+    <aside ref={sidebarRef} className={`sidebar ${mobileMenuOpen ? "mobile-open" : ""}`}>
       <div className="brand">
         <span className="brand-pi">π</span>
         <span className="brand-title">Pi Webdesk</span>
-        <span className="brand-tag">Local</span>
+        <span className="brand-tag">{workspaceInfo ? "Local" : "Chat"}</span>
+        <button className="sidebar-close-btn" onClick={() => setMobileMenuOpen(false)} aria-label="Close sidebar" title="Close sidebar">
+          <UiIcon name="close" />
+        </button>
       </div>
 
       <div ref={workspacePickerRef} className="workspace-picker">
         <button className="workspace-switcher" aria-haspopup="menu" aria-expanded={workspaceOpen} onClick={() => { setWorkspaceOpen((value) => !value); setModelPickerOpen(false); setWorkspaceFocusOpen(false); }}>
-          <span className="folder-icon"><UiIcon name="folder" /></span>
-          <span>{workspaceInfo?.name ? `~/${workspaceInfo.name}` : "Open workspace"}</span>
+          <span className="folder-icon"><UiIcon name={workspaceInfo ? "folder" : "message"} /></span>
+          <span>{workspaceInfo?.name ? `~/${workspaceInfo.name}` : "Chat mode (No folder)"}</span>
           <Chevron open={workspaceOpen} />
         </button>
-        {workspaceOpen && <WorkspaceMenu saved={savedWorkspaces} activeId={workspaceInfo?.id} onOpen={openFolder} onChoose={reopenWorkspace} />}
+        {workspaceOpen && <WorkspaceMenu saved={savedWorkspaces} activeId={workspaceInfo?.id} onOpen={openFolder} onChoose={reopenWorkspace} onSwitchToChat={switchToChat} />}
       </div>
 
       <div className="sidebar-sections">
@@ -902,7 +955,7 @@ export function App() {
             {activeSession && <>
               <div className="session-sub-label">Active</div>
               <div className="session-row active">
-                {editingSessionId === activeSession.id ? <input className="session-rename-input" value={sessionNameDraft} autoFocus onChange={(e) => setSessionNameDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void commitSessionRename(activeSession); } if (e.key === "Escape") cancelSessionRename(); }} onBlur={() => void commitSessionRename(activeSession)} /> : <button className="session-select" onClick={() => loadExistingSession(activeSession)}><span className="session-status-dot" /><span className="session-name">{activeSession.name}</span></button>}
+                {editingSessionId === activeSession.id ? <input className="session-rename-input" value={sessionNameDraft} autoFocus onChange={(e) => setSessionNameDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void commitSessionRename(activeSession); } if (e.key === "Escape") cancelSessionRename(); }} onBlur={() => void commitSessionRename(activeSession)} /> : <button className="session-select" onClick={() => { void loadExistingSession(activeSession); setMobileMenuOpen(false); }}><span className="session-status-dot" /><span className="session-name">{activeSession.name}</span></button>}
                 <div className="session-row-actions">
                   <button className="session-action" title="Rename" onClick={() => beginSessionRename(activeSession)}><UiIcon name="edit" /></button>
                   <button className="session-action delete" title="Delete" onClick={() => removeSession(activeSession)}><UiIcon name="close" /></button>
@@ -912,7 +965,7 @@ export function App() {
             {otherSessions.length > 0 && <>
               <div className="session-sub-label">Recent</div>
               {otherSessions.map((session) => <div className="session-row" key={session.id}>
-                {editingSessionId === session.id ? <input className="session-rename-input" value={sessionNameDraft} autoFocus onChange={(e) => setSessionNameDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void commitSessionRename(session); } if (e.key === "Escape") cancelSessionRename(); }} onBlur={() => void commitSessionRename(session)} /> : <button className="session-select" onClick={() => loadExistingSession(session)}><span className="session-name">{session.name}</span></button>}
+                {editingSessionId === session.id ? <input className="session-rename-input" value={sessionNameDraft} autoFocus onChange={(e) => setSessionNameDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void commitSessionRename(session); } if (e.key === "Escape") cancelSessionRename(); }} onBlur={() => void commitSessionRename(session)} /> : <button className="session-select" onClick={() => { void loadExistingSession(session); setMobileMenuOpen(false); }}><span className="session-name">{session.name}</span></button>}
                 <div className="session-row-actions">
                   <button className="session-action" title="Rename" onClick={() => beginSessionRename(session)}><UiIcon name="edit" /></button>
                   <button className="session-action delete" title="Delete" onClick={() => removeSession(session)}><UiIcon name="close" /></button>
@@ -932,21 +985,26 @@ export function App() {
             </div>
             <div className="sidebar-section-actions">
               {workspaceInfo && <span className="version-tag">{workspaceEntries.filter((e) => e.kind === "file").length}</span>}
-              <button className="sidebar-btn" aria-label="Refresh files" title="Refresh files" onClick={(e) => { e.stopPropagation(); void refreshWorkspaceTree(workspace, "update"); }} disabled={!workspaceInfo}>
+              <button className="sidebar-btn" aria-label="Refresh files" title="Refresh files" onClick={(e) => { e.stopPropagation(); if (workspace) void refreshWorkspaceTree(workspace, "update"); }} disabled={!workspaceInfo}>
                 <UiIcon name="refresh" />
               </button>
             </div>
           </div>
-          {filesExpanded && <>
-            {workspaceInfo && <div className="file-search-wrap"><input className="file-search-input" value={fileQuery} onChange={(e) => setFileQuery(e.target.value)} placeholder="Search files..." aria-label="Search files" /></div>}
+          {filesExpanded && (workspaceInfo ? <>
+            <div className="file-search-wrap"><input className="file-search-input" value={fileQuery} onChange={(e) => setFileQuery(e.target.value)} placeholder="Search files..." aria-label="Search files" /></div>
             <WorkspaceTree entries={workspaceEntries} query={fileQuery} expandedPaths={expandedPaths} selectedPath={selectedFilePath} onToggle={toggleTreePath} onSelect={selectFile} />
-          </>}
+          </> : (
+            <div className="file-tree-empty-notice">
+              <span>No folder open.</span>
+              <small>Choose “Open folder…” to inspect code, or continue in chat mode.</small>
+            </div>
+          ))}
         </section>
       </div>
 
       <div className="sidebar-bottom">
         <div className="sidebar-actions">
-          <button className="settings-link" onClick={() => setSettingsOpen(true)}><UiIcon name="settings" /><span>Settings</span></button>
+          <button className="settings-link" onClick={() => { setSettingsOpen(true); setMobileMenuOpen(false); }}><UiIcon name="settings" /><span>Settings</span></button>
           <button className="theme-toggle" aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`} title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`} onClick={() => setTheme((value) => value === "dark" ? "light" : "dark")}><UiIcon name={theme === "dark" ? "sun" : "moon"} /></button>
         </div>
         <span className="version-tag">v0.1.0</span>
@@ -959,17 +1017,26 @@ export function App() {
     <section className="app-workspace">
       <header className="topbar">
         <div className="topbar-left">
-          <span className="topbar-task-title">{activeSession?.name || "New task"}</span>
+          <button className="mobile-menu-btn" onClick={() => setMobileMenuOpen((v) => !v)} aria-label="Toggle navigation menu" title="Toggle navigation menu">
+            <UiIcon name="menu" />
+          </button>
+          <span className="topbar-task-title">{activeSession?.name || (workspaceInfo ? "New task" : "New chat")}</span>
         </div>
         <div className="topbar-right">
           <button ref={modelPickerTriggerRef} className="topbar-pill" onClick={toggleModelPicker} title={`Model: ${activeModelLabel}`}>
             <span>[{activeModelLabel}]</span>
             <Chevron open={modelPickerOpen} />
           </button>
-          <button ref={workspaceFocusTriggerRef} className="topbar-pill accent" onClick={toggleWorkspaceFocus} title={`Mode: ${WORKSPACE_ACCESS_BUTTON_LABELS[workspaceAccessMode]}`}>
-            <span>[{WORKSPACE_ACCESS_BUTTON_LABELS[workspaceAccessMode]}]</span>
-            <Chevron open={workspaceFocusOpen} />
-          </button>
+          {workspaceInfo ? (
+            <button ref={workspaceFocusTriggerRef} className="topbar-pill accent" onClick={toggleWorkspaceFocus} title={`Mode: ${WORKSPACE_ACCESS_BUTTON_LABELS[workspaceAccessMode]}`}>
+              <span>[{WORKSPACE_ACCESS_BUTTON_LABELS[workspaceAccessMode]}]</span>
+              <Chevron open={workspaceFocusOpen} />
+            </button>
+          ) : (
+            <button className="topbar-pill" onClick={() => setMobileMenuOpen(true)} title="Chat mode (No folder selected)">
+              <span style={{ color: "var(--accent)" }}>[Chat]</span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -983,8 +1050,8 @@ export function App() {
               {messages.length === 0 && <div className="empty-state">
                 <div className="empty-logo">π</div>
                 <h1>Pi Webdesk</h1>
-                <p>{workspaceInfo ? `Workspace: ${workspaceInfo.name}` : "Open a local folder to start reading and editing files."}</p>
-                <div className="quick-actions">{quickActions.map((action) => <button className="quick-action" key={action.title} onClick={() => setComposer(action.prompt)}><span className="quick-action-icon"><UiIcon name={action.icon} /></span><span className="quick-action-copy"><strong>{action.title}</strong><small>{action.description}</small></span></button>)}</div>
+                <p>{workspaceInfo ? `Workspace: ${workspaceInfo.name}` : "Chat mode. Ask questions, discuss code, or open a local folder."}</p>
+                <div className="quick-actions">{quickActions.map((action) => <button className="quick-action" key={action.title} onClick={() => action.action ? action.action() : setComposer(action.prompt)}><span className="quick-action-icon"><UiIcon name={action.icon} /></span><span className="quick-action-copy"><strong>{action.title}</strong><small>{action.description}</small></span></button>)}</div>
               </div>}
 
               {transcriptGroups.map((group) => group.role === "assistant" ? <AssistantTurn key={group.key} messages={group.messages} toolActivity={toolActivity} results={toolResults} /> : <article className="message user" key={group.key}><div className="message-meta"><span className="user-prompt-glyph">❯</span><strong>You</strong><time>{new Date((group.message as any).timestamp || Date.now()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time></div><div className="message-text">{safeMarkdown(textFromMessage(group.message))}</div><CopyButton text={textFromMessage(group.message)} /></article>)}
@@ -1091,10 +1158,12 @@ function SettingsDialog({ settings, apiStatus, onTest, onChange, onProvidersChan
   </Dialog>;
 }
 
-function WorkspaceMenu({ saved, activeId, onOpen, onChoose }: { saved: WorkspaceRecord[]; activeId?: string; onOpen: () => void; onChoose: (record: WorkspaceRecord) => void }) {
+function WorkspaceMenu({ saved, activeId, onOpen, onChoose, onSwitchToChat }: { saved: WorkspaceRecord[]; activeId?: string; onOpen: () => void; onChoose: (record: WorkspaceRecord) => void; onSwitchToChat: () => void }) {
+  const supportsPicker = typeof window !== "undefined" && "showDirectoryPicker" in window;
   return <div className="workspace-menu" role="menu" aria-label="Workspaces">
     <div className="workspace-menu-heading"><strong>Workspace</strong><span>{saved.length ? `${saved.length} saved` : "No saved folders"}</span></div>
-    <button className="workspace-menu-open" role="menuitem" onClick={() => void onOpen()}><UiIcon name="folder" /><span>Open folder</span></button>
+    <button className={`workspace-menu-open ${!activeId ? "active-mode" : ""}`} role="menuitem" onClick={() => void onSwitchToChat()}><UiIcon name="message" /><span>Chat mode (No folder)</span></button>
+    <button className="workspace-menu-open" role="menuitem" onClick={() => void onOpen()} title={supportsPicker ? undefined : "Local folder selection is not supported in this browser"}><UiIcon name="folder" /><span>Open folder… {!supportsPicker && <small>(Desktop only)</small>}</span></button>
     {saved.length > 0 ? <><div className="workspace-menu-section-label">RECENT FOLDERS</div><div className="saved-workspaces">{saved.map((record) => <button role="menuitem" className={`saved-workspace ${activeId === record.id ? "selected" : ""}`} key={record.id} aria-current={activeId === record.id ? "page" : undefined} onClick={() => void onChoose(record)}><span>{record.name}</span></button>)}</div></> : <p className="workspace-menu-empty">Choose a folder to browse it in the workspace.</p>}
   </div>;
 }

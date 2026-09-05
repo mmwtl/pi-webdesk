@@ -19,4 +19,12 @@ describe("system prompt", () => {
   test("does not add an empty custom prompt section", () => {
     expect(createSystemPrompt(workspace, "read", "  ")).not.toContain("User-provided instructions configured in Settings:");
   });
+
+  test("generates chat-only prompt when workspace is undefined", () => {
+    const prompt = createSystemPrompt(undefined, "write", "Be concise.");
+    expect(prompt).toContain("Mode: Chat only (no workspace folder selected).");
+    expect(prompt).toContain("User-provided instructions configured in Settings:\nBe concise.");
+    expect(prompt).toContain("There is no shell, Git, terminal, compiler, process runner, or file watcher.");
+    expect(prompt).not.toContain("Selected workspace:");
+  });
 });
